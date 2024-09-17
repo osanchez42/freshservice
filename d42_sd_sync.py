@@ -12,6 +12,7 @@ import xml.etree.ElementTree as eTree
 from xmljson import badgerfish as bf
 import time
 import math
+import configparser
 
 logger = logging.getLogger('log')
 logger.setLevel(logging.INFO)
@@ -34,6 +35,13 @@ ASSET_TYPE_WINDOWS_SERVER = "Windows Server"
 ASSET_TYPE_HOST = "Host"
 
 parser = argparse.ArgumentParser(description="freshservice")
+parser.add_argument('-fsurl', '--freshserviceurl', action='store_true', help='Freshservice url')
+parser.add_argument('-fstoken', '--freshservicetoken', action='store_true', help='Freshservice API token')
+parser.add_argument('-fsuser', '--freshserviceusername', action='store_true', help='Freshservice user', default=None)
+
+parser.add_argument('-d42url', '--d42url', action='store_true', help='Device42 URL')
+parser.add_argument('-d42user', '--d42username', action='store_true', help='Device42 username')
+parser.add_argument('-d42pass', '--d42password', action='store_true', help='Device42 password')
 
 parser.add_argument('-d', '--debug', action='store_true', help='Enable debug output')
 parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode - outputs only errors')
@@ -1190,27 +1198,94 @@ def main():
     global freshservice
     global default_approver
 
+    debug = False
+    quiet = False
+    device42_url = ""
+    device42_user = ""
+    device42_pass = ""
+    freshservice_url = ""
+    freshservice_api_key = ""
+    freshervice_default_approver_email = ""
+
+    # read args from command line
     args = parser.parse_args()
-    if args.debug:
+    if not all([args.freshserviceurl, args.freshservicetoken, args.freshserviceusername, 
+            args.d42url, args.d42username, args.d42password]):
+        print("Not all command line args were supplied, fallback to config.ini")
+
+        # read config file if exists
+        if os.path.exists(os.path.join(os.getcwd(), "config.ini")):
+            config = configparser.ConfigParser()
+            config.read("config.ini")
+            device42_url = config['Device42']['URL']
+            device42_user = config['Device42']['Username']
+            device42_pass = config['Device42']['Password']
+            freshservice_url = config['Freshservice']['URL']
+            freshservice_api_key = config['Freshservice']['APIKey']
+            if config['Freshservice']['User'] != "":
+                freshervice_default_approver_email = config['Freshservice']['User']
+            settings = config['Settings']
+            if config["Settings"]["Debug"]:
+                debug = settings.getboolean("Debug")
+            if config["Settings"]["Quiet"]:
+                quiet = settings.getboolean("Quiet")
+        else:
+            # read environmental variables if exists
+            print("No config.ini file found, fallback to environment variables")
+            for key in ["D42_URL", "D42_USER", "D42_PASS", "FS_URL", "FS_API_KEY"]:
+                if key not in os.environ:
+                    print(f"{key} missing from environmental variables, exiting")
+                    return -1
+            device42_url = os.environ.get("D42_URL")
+            device42_user = os.environ.get("D42_USER")
+            device42_pass = os.environ.get("D42_PASS")
+            freshservice_url = os.environ.get("FS_URL")
+            freshservice_api_key = os.environ.get("FS_API_KEY")
+            if "FS_USER" in os.environ:
+                    freshervice_default_approver_email = os.environ.get("FS_USER")
+            if "D42_FS_DEBUG_LEVEL" in os.environ:
+                debug = bool(os.environ.get("D42_FS_DEBUG"))
+            if "D42_FS_QUIET" in os.environ:
+                quiet = bool(os.environ.get("D42_FS_QUIET"))
+    else:
+        config = parse_config(args.config)
+        logger.debug("configuration info: %s" % (json.dumps(config)))
+        settings = config["meta"]["settings"]
+
+        device42_url = settings['device42']['@url']
+        device42_user = settings['device42']['@user']
+        device42_pass = settings['device42']['@pass']
+        freshservice_url = settings['freshservice']['@url']
+        freshservice_api_key = settings['freshservice']['@api_key']
+        if '@default_approver_email' in settings['freshservice']:
+            freshervice_default_approver_email = get_agent_from_freshservice(settings['freshservice']['@default_approver_email'])
+        if '@debug' in settings['meta']:
+            debug = bool(settings['meta']['@debug'])
+        if '@quiet' in settings['meta']:
+            quiet = bool(settings['meta']['@quiet'])
+
+    if debug:
         logger.setLevel(logging.DEBUG)
-    if args.quiet:
+    if quiet:
         logger.setLevel(logging.ERROR)
 
+    # setup logging file
     try:
-        log_file = "%s/d42_fs_sync_%d.log" % (args.logfolder, int(time.time()))
+        log_file = f"d42_fs_sync_{int(time.time())}.log"
         logging.basicConfig(filename=log_file)
     except Exception as e:
         print("Error in config log: %s" % str(e))
         return -1
-
-    config = parse_config(args.config)
+    
+    # read the config file
+    config = parse_config("mapping.xml")
     logger.debug("configuration info: %s" % (json.dumps(config)))
 
-    settings = config["meta"]["settings"]
-    device42 = Device42(settings['device42']['@url'], settings['device42']['@user'], settings['device42']['@pass'])
-    freshservice = FreshService(settings['freshservice']['@url'], settings['freshservice']['@api_key'], logger)
-    if '@default_approver_email' in settings['freshservice']:
-        default_approver = get_agent_from_freshservice(settings['freshservice']['@default_approver_email'])
+    device42 = Device42(device42_url, device42_user, device42_pass)
+    freshservice = FreshService(freshservice_url, freshservice_api_key, logger)
+
+    if freshervice_default_approver_email:
+        default_approver = get_agent_from_freshservice(freshervice_default_approver_email)
 
     if "task" not in config["meta"]["tasks"]:
         logger.debug("No task")

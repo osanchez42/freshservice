@@ -1489,7 +1489,7 @@
                                    device.details ->> 'security_groups' AS security_groups,
                                    device.details ->> 'subnet_id' AS subnet_id,
                                    device.details ->> 'vpc_id' AS vpc_id,
-                                   device.details ->> 'account_id' AS account_id,
+                                   (device.details ->> 'account_id')::BIGINT AS account_id,
                                    device.details ->> 'ami_launch_index' AS ami_launch_index,
                                    'AWS VM' as asset_type
                             FROM 
@@ -1523,8 +1523,8 @@
                             <field resource="security_groups" source-type="string" target="security_groups" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>                         
                             <field resource="subnet_id" source-type="string" target="subnet_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                             <field resource="vpc_id" source-type="string" target="vpc_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="account_id" source-type="string" target="account_id" target-type="integer" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="ami_launch_index" source-type="string" target="account_id" target-type="integer" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                            <field resource="account_id" source-type="string" target="account_id" target-type="integer" target-header="AWS VM" not-null="true" set-space="true"/>
+                            <field resource="ami_launch_index" source-type="string" target="ami_launch_index" target-type="integer" target-header="AWS VM" not-null="true"/>
 			</mapping>
 		</task>
 	</tasks>

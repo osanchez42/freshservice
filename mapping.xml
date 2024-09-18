@@ -1470,8 +1470,8 @@
                             SELECT 
                                    device.*,
                                    device.details ->> 'item_id' AS item_id,
-                                   device.details ->> 'instance_id' AS instance_id,
-                                   device.details ->> 'instance_type' AS instance_type,
+                                   cloud_instance.instance_id,
+                                   cloud_instance.instance_type,
                                    device.details ->> 'private_ip_address' AS private_ip_address,
                                    device.details ->> 'public_ip_address' AS public_ip_address,
                                    device.details ->> 'state' AS state,
@@ -1497,6 +1497,8 @@
                                    'AWS VM' as asset_type
                             FROM 
                                    view_device_v2 device
+                            LEFT JOIN 
+                                   view_cloudinstance_v1 cloud_instance ON device.device_pk = cloud_instance.device_fk
                             WHERE 
                                    device.type = 'virtual' 
                                    AND device.virtualsubtype = 'Amazon EC2 Instance'

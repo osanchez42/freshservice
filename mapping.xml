@@ -1465,7 +1465,8 @@
               <task enable="true" name="AWS VMs" type="Devices" description="Copy AWS VMs from Device42 to FreshService" d42_min_version="16.19.00">
 			<api>
 			       <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
-				<resource model="Devices" target="device42" method="POST" path="services/data/v1.0/query/"
+				<!-- only platform choice is windows as of 09/17/24 -->
+                            <resource model="Devices" target="device42" method="POST" path="services/data/v1.0/query/"
                             doql="
                             SELECT 
                                    device.*,
@@ -1483,7 +1484,10 @@
                                    device.details ->> 'key_name' AS key_name,
                                    (device.details ->> 'launch_time')::timestamptz AS launch_time,
                                    device.details ->> 'monitoring_state' AS monitoring_state,
-                                   device.details ->> 'platform_details' AS platform,
+                                   CASE 
+                                          WHEN LOWER(device.details ->> 'platform_details') = 'windows' THEN 'Windows'
+                                          ELSE ''
+                                   END AS platform,
                                    device.details ->> 'private_dns_name' AS private_dns_name,
                                    device.details ->> 'public_dns_name' AS public_dns_name,
                                    device.details ->> 'security_groups' AS security_groups,
@@ -1504,7 +1508,7 @@
                             <!-- AWS VM -->
                             <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>                            
                             <field resource="item_id" source-type="string" target="item_id" target-type="integer" target-header="AWS VM" not-null="true" error-skip="true"/>
-                            <field resource="instance_type" source-type="string" target="cd_instance_type" target-type="dropdown" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                            <field resource="instance_type" source-type="string" target="cd_instance_type" target-type="dropdown" target-header="AWS VM" not-null="false" set-space="true"/>
                             <field resource="instance_id" source-type="string" target="cd_instance_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                             <field resource="private_ip_address" source-type="string" target="private_address" target-header="Virtual Machine" not-null="true" set-space="true" min-length="1" max-length="255"/>
                             <field resource="public_ip_address" source-type="string" target="public_address" target-header="Virtual Machine" not-null="true" set-space="true" min-length="1" max-length="255"/>
@@ -1517,7 +1521,7 @@
                             <field resource="key_name" source-type="string" target="key_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                             <field resource="launch_time" source-type="string" target="launch_time" target-type="date" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                             <field resource="monitoring_state" source-type="string" target="monitoring_state" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="platform" source-type="string" target="platform" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                            <field resource="platform" source-type="string" target="platform" target-type="dropdown" target-header="AWS VM" not-null="false"/>
                             <field resource="private_dns_name" source-type="string" target="private_dns_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                             <field resource="public_dns_name" source-type="string" target="public_dns_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/> 
                             <field resource="security_groups" source-type="string" target="security_groups" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>                         

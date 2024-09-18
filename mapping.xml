@@ -1474,7 +1474,6 @@
                                    cloud_instance.instance_type,
                                    device.details ->> 'private_ip_address' AS private_ip_address,
                                    device.details ->> 'public_ip_address' AS public_ip_address,
-                                   device.details ->> 'state' AS state,
                                    (device.details ->> 'ebs_optimized')::boolean AS ebs_optimized,
                                    device.details ->> 'hypervisor' AS hypervisor,
                                    device.details ->> 'iam_instance_profile' AS iam_instance_profile,

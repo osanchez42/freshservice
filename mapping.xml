@@ -1461,8 +1461,7 @@
 			<mapping callback="from_d42" key="dependency_device_name" downstream-relationship="Virtualized by" upstream-relationship="Virtualizes" target-key="dependent_device_name"></mapping>
 		</task>
 
-              <!-- AWS FRESHSERVICE PARODY -->
-              <task enable="true" name="AWS VMs" type="Devices" description="Copy AWS VMs from Device42 to FreshService" d42_min_version="16.19.00">
+              <task enable="true" name="D42 AWS VM to Freshservice AWS VM" type="Devices" description="Copy AWS VMs from Device42 to FreshService" d42_min_version="16.19.00">
 			<api>
 			       <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
 				<!-- only platform choice is windows as of 09/17/24 -->
@@ -1505,30 +1504,30 @@
                             />
 			</api>
 			<mapping callback="from_d42" key="name">
-                            <!-- AWS VM -->
-                            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>                            
-                            <field resource="item_id" source-type="string" target="item_id" target-type="integer" target-header="AWS VM" not-null="true" error-skip="true"/>
-                            <field resource="instance_type" source-type="string" target="cd_instance_type" target-type="dropdown" target-header="AWS VM" not-null="false" set-space="true"/>
-                            <field resource="instance_id" source-type="string" target="cd_instance_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="private_ip_address" source-type="string" target="private_address" target-header="Virtual Machine" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="public_ip_address" source-type="string" target="public_address" target-header="Virtual Machine" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="state" source-type="string" target="state" target-type="dropdown" target-header="Virtual Machine" not-null="true"/>
-                            <field resource="ebs_optimized" source-type="string" target="ebs_optimized" target-type="boolean" target-header="AWS VM" not-null="true"/>
-                            <field resource="hypervisor" source-type="string" target="hypervisor" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="iam_instance_profile" source-type="string" target="iam_instance_profile" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="image_id" source-type="string" target="image_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="instance_lifecycle" source-type="string" target="instance_lifecycle" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/> 
-                            <field resource="key_name" source-type="string" target="key_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="launch_time" source-type="string" target="launch_time" target-type="date" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="monitoring_state" source-type="string" target="monitoring_state" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="platform" source-type="string" target="platform" target-type="dropdown" target-header="AWS VM" not-null="false"/>
-                            <field resource="private_dns_name" source-type="string" target="private_dns_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="public_dns_name" source-type="string" target="public_dns_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/> 
-                            <field resource="security_groups" source-type="string" target="security_groups" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>                         
-                            <field resource="subnet_id" source-type="string" target="subnet_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="vpc_id" source-type="string" target="vpc_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                            <field resource="account_id" source-type="string" target="account_id" target-type="integer" target-header="AWS VM" not-null="true" set-space="true"/>
-                            <field resource="ami_launch_index" source-type="string" target="ami_launch_index" target-type="integer" target-header="AWS VM" not-null="true"/>
+				<!-- AWS VM -->
+				<field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>                            
+				<field resource="item_id" source-type="string" target="item_id" target-type="integer" target-header="AWS VM" not-null="true" error-skip="true"/>
+				<field resource="instance_type" source-type="string" target="cd_instance_type" target-type="dropdown" target-header="AWS VM" not-null="false" set-space="true"/>
+				<field resource="instance_id" source-type="string" target="cd_instance_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="private_ip_address" source-type="string" target="private_address" target-header="Virtual Machine" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="public_ip_address" source-type="string" target="public_address" target-header="Virtual Machine" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="state" source-type="string" target="state" target-type="dropdown" target-header="Virtual Machine" not-null="false"/>
+				<field resource="ebs_optimized" source-type="string" target="ebs_optimized" target-type="boolean" target-header="AWS VM" not-null="true"/>
+				<field resource="hypervisor" source-type="string" target="hypervisor" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="iam_instance_profile" source-type="string" target="iam_instance_profile" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="image_id" source-type="string" target="image_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="instance_lifecycle" source-type="string" target="instance_lifecycle" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/> 
+				<field resource="key_name" source-type="string" target="key_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="launch_time" source-type="string" target="launch_time" target-type="date" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="monitoring_state" source-type="string" target="monitoring_state" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="platform" source-type="string" target="platform" target-type="dropdown" target-header="AWS VM" not-null="false"/>
+				<field resource="private_dns_name" source-type="string" target="private_dns_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="public_dns_name" source-type="string" target="public_dns_name" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/> 
+				<field resource="security_groups" source-type="string" target="security_groups" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>                         
+				<field resource="subnet_id" source-type="string" target="subnet_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="vpc_id" source-type="string" target="vpc_id" target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+				<field resource="account_id" source-type="string" target="account_id" target-type="integer" target-header="AWS VM" not-null="true" set-space="true"/>
+				<field resource="ami_launch_index" source-type="string" target="ami_launch_index" target-type="integer" target-header="AWS VM" not-null="true"/>
 			</mapping>
 		</task>
 	</tasks>

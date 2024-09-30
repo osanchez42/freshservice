@@ -588,7 +588,6 @@
               resource.resource_name                                                     AS name,  
               resource.identifier                                                        AS item_id,                                                            
               resource.region                                                            AS region,
-              NOW()                                                                      AS current_time,
               resource.details ->> 'owner_id'                                            AS owner_id,
               resource.details ->> 'vpc_id'                                              AS vpc_id,
               resource.details ->> 'description'                                         AS description,
@@ -618,7 +617,6 @@
             <field resource="description" source-type="string" target="description" target-header="AWS Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
             <field resource="inbound_rules_count" source-type="string" target="inbound_rules_count" target-type="integer" target-header="Security Group" not-null="true"/>
             <field resource="outbound_rules_count" source-type="string" target="outbound_rules_count" target-type="integer" target-header="Security Group" not-null="true"/>
-            <field resource="current_time" source-type="string" target="cloud_last_audit_date" target-type="date" target-header="Cloud" not-null="true"/>          
           </mapping>
         </task>
     </tasks>

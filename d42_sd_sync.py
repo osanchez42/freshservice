@@ -318,6 +318,8 @@ def update_objects_from_server(sources, _target, mapping):
                                 elif target_type == "date":
                                     value = None
                                     is_valid = False
+                                elif target_type == "boolean":
+                                    value = False
                                 else:
                                     value = " "
                             else:
@@ -334,7 +336,14 @@ def update_objects_from_server(sources, _target, mapping):
                             except Exception as e:
                                 logger.exception(str(e))
                                 is_valid = False
-
+                        
+                        elif target_type == "boolean":
+                            try:
+                                value = bool(value)
+                            except Exception as e:
+                                logger.exception(str(e))
+                                is_valid = False
+                                
                         elif target_type == "dropdown":
                             try:
                                 option = None
@@ -968,6 +977,8 @@ def update_contracts_from_server(sources, _target, mapping):
                             elif target_type == "date":
                                 value = None
                                 is_valid = False
+                            elif target_type == "boolean":
+                                value = False
                             else:
                                 value = " "
                         else:
@@ -1277,7 +1288,7 @@ def main():
         print("Error in config log: %s" % str(e))
         return -1
     
-    # read the config file
+    # read the config files
     config = parse_config("mapping.xml")
     logger.debug("configuration info: %s" % (json.dumps(config)))
 

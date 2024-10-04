@@ -619,5 +619,47 @@
             <field resource="outbound_rules_count" source-type="string" target="outbound_rules_count" target-type="integer" target-header="Security Group" not-null="true"/>
           </mapping>
         </task>
+
+        <task enable="true" name="D42 Azure Subscription to Freshservice Azure Subscription" type="Azure Subscription" description="Copy Azure Subscription from Device42 to FreshService" d42_min_version="19.04.00">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
+            <resource model="Subnets" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,
+              resource.identifier                                                        AS item_id,
+              resource.details ->> 'state'                                               AS subscription_state,
+              resource.details ->> 'authorization_source'                                AS authorization_source,
+              resource.details ->> 'tenant'                                              AS tenant,
+              resource.details ->> 'location_placement_id'                               AS location_placement_id,
+              resource.details ->> 'quota_id'                                            AS quota_id,
+              resource.details ->> 'spending_limit'                                      AS spending_limit,
+              'AZURE'                                                                    AS provider,
+              'Azure Subscription'                                                       AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            WHERE resource.category @> ARRAY['azure_subscription']
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <!-- Azure Subscription -->
+            <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/>
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Subscription" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Subscription" not-null="true" error-skip="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="authorization_source" source-type="string" target="authorization_source" target-type="string" target-header="Azure Subscription" not-null="true"/>
+            <field resource="tenant" source-type="string" target="tenant_id" target-type="string" target-header="Azure Subscription" not-null="true"/>
+            <field resource="subscription_state" source-type="string" target="subscription_state" target-type="dropdown" target-header="Azure Subscription" not-null="true" min-length="1" max-length="255"/>
+            <field resource="location_placement_id" source-type="string" target="location_placement_id" target-type="string" target-header="Azure Subscription" not-null="true"/>
+            <field resource="quota_id" source-type="string" target="quota_id" target-type="string" target-header="Azure Subscription" not-null="true"/>
+            <field resource="spending_limit" source-type="string" target="spending_limit" target-type="string" target-header="Azure Subscription" not-null="true"/>
+         </mapping>
+        </task>
     </tasks>
 </meta>

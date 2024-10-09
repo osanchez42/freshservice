@@ -1,6 +1,6 @@
 <meta>
     <tasks>
-        <task enable="true" name="Products" type="product" description="Copy Product info from Device42 to FreshService" d42_min_version="16.19.00">
+       <task enable="true" name="Products" type="product" description="Copy Product info from Device42 to FreshService" d42_min_version="16.19.00">
             <api>
                 <target model="products" target="freshservice" method="POST" update_method="PUT" path="api/v2/products" asset-type="Hardware"/>
                 <resource target="device42" method="POST"
@@ -21,10 +21,10 @@
             </mapping>
         </task>
 
-        <task enable="true" name="Devices" description="Copy Servers from Device42 to FreshService using DOQL v2" d42_min_version="19.03.00">
+        <task enable="false" name="Devices" description="Copy Servers from Device42 to FreshService using DOQL v2" d42_min_version="19.03.00">
             <api>
-                <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
-                <resource model="Devices" target="device42" method="POST" path="services/data/v1.0/query/"
+                <target model="products" target="freshservice" method="POST" update_method="PUT" path="api/v2/products"/>
+                <resource target="device42" method="POST" path="services/data/v1.0/query/"
                           doql="
                                 WITH
                                 devicelastlogin AS (
@@ -198,8 +198,18 @@
                                     alias.hostname as hostname,
                                     case when devicelastlogin.enduser_email is not null then devicelastlogin.enduser_email
                                           else devicelastlogin.username end as last_login_by,
-                                    ci.location as cloud_instance_region,
-                                    ci.location as cloud_instance_location,
+                                    CASE
+                                      WHEN (lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'amazon ec2 instance') THEN substr(ci.location, 1, length(ci.location) - 1)
+                                      WHEN (lower(view_device_v2.type) = 'virtual' AND (lower(view_device_v2.virtualsubtype) = 'azure virtual machine'
+                                                                                                         OR lower(view_device_v2.virtualsubtype) = 'azure cloud service')) THEN ci.details->>'region_name'
+                                      ELSE NULL
+                                    END AS cloud_instance_region,
+                                    CASE
+                                      WHEN (lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'amazon ec2 instance') THEN ci.location
+                                      WHEN (lower(view_device_v2.type) = 'virtual' AND (lower(view_device_v2.virtualsubtype) = 'azure virtual machine'
+                                                                                                         OR lower(view_device_v2.virtualsubtype) = 'azure cloud service')) THEN NULL
+                                      ELSE NULL
+                                    END AS cloud_instance_location,
                                     ci.instance_type as cloud_instance_type,
                                     ci.account as cloud_account,
                                     ci.image_id as cloud_image_id,
@@ -234,12 +244,12 @@
                                     device_cluster.device_cluster_name as device_cluster_name,
                                     (view_device_v2.details ->> 'ebs_optimized')::boolean AS ebs_optimized,
                                     view_device_v2.details ->> 'hypervisor' AS aws_hypervisor,
+                                    view_device_v2.details ->> 'iam_instance_profile' AS iam_instance_profile,
+                                    view_device_v2.details ->> 'image_id' AS cloud_image_id,
                                     case
                                           WHEN LOWER(view_device_v2.details ->> 'instance_lifecycle') IN ('spot', 'scheduled') THEN view_device_v2.details ->> 'instance_lifecycle'
                                           ELSE 'normal'
                                     END AS instance_lifecycle,
-                                    view_device_v2.details ->> 'image_id' AS cloud_image_id,
-                                    view_device_v2.details ->> 'iam_instance_profile' AS iam_instance_profile,
                                     view_device_v2.details ->> 'key_name' AS key_name,
                                     (view_device_v2.details ->> 'launch_time')::timestamptz AS launch_time,
                                     view_device_v2.details ->> 'monitoring_state' AS monitoring_state,
@@ -249,6 +259,11 @@
                                     view_device_v2.details ->> 'subnet_id' AS subnet_id,
                                     view_device_v2.details ->> 'vpc_id' AS vpc_id,
                                     view_device_v2.details ->> 'ami_launch_index' AS ami_launch_index,
+                                    view_device_v2.details ->> 'offer' AS offer,
+                                    view_device_v2.details ->> 'publisher' AS publisher,
+                                    view_device_v2.details ->> 'os_disk_name' AS os_disk_name,
+                                    view_device_v2.details ->> 'computer_name' AS computer_name,
+                                    view_device_v2.details ->> 'resource_uri' AS resource_uri,
                                     mount_point.mountpoint as mountpoint,
                                     CONCAT_WS(' ',  view_device_v2.os_name, view_device_v2.os_version, view_device_v2.os_version_no) as hypervisor,
                                     hv.name as hardware_vendor,
@@ -259,6 +274,9 @@
                                        when view_device_v2.name ~* '^((?!-)[A-Za-z0-9-]{{1,63}}(?&lt;!-)\.)+[A-Za-z]{{2,6}}$' then substring(view_device_v2.name, position('.' in view_device_v2.name)+1)
 	                                else null end domain_name,
 	                                network_port_count.total_port_count as total_port_count,
+                                    view_device_v2.details ->> 'intune_id' AS intune_id,
+                                    view_device_v2.details ->> 'airwatch_id' AS airwatch_id,
+                                    view_device_v2.details ->> 'automox_id' AS automox_id,
                                     format('Device-%s', view_device_v2.device_pk) as device42_id
                                 FROM view_device_v2
                                 LEFT JOIN view_hardware_v2          on view_device_v2.hardware_fk   = view_hardware_v2.hardware_pk
@@ -287,12 +305,15 @@
             </matching>
             <mapping callback="from_d42" key="name" source="Devices" doql-suffix=" where view_device_v2.last_edited>'%s' ">
                 <!-- D42 Specific -->
-                <!-- <field resource="device42_id" source-type="string" target="device42_id" target-type="string"/> -->
+                <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/>
+                <field resource="intune_id" source-type="string" target="source_asset_ids" target-field="intune_id" target-type="dict"/>
+                <field resource="airwatch_id" source-type="string" target="source_asset_ids" target-field="airwatch_id" target-type="dict"/>
+                <field resource="automox_id" source-type="string" target="source_asset_ids" target-field="automox_id" target-type="dict"/>
                 <!-- ~D42 Specific -->
 
                 <!--  General -->
-                <!-- <field resource="asset_no" source-type="string" target="asset_tag" target-type="string"
-                       target-header="General" not-null="true" min-length="1" max-length="255"/> -->
+                <field resource="asset_no" source-type="string" target="asset_tag" target-type="string"
+                       target-header="General" not-null="true" min-length="1" max-length="255"/>
                 <field resource="name" source-type="string" target="name" target-type="string" target-header="General"
                        set-space="true" min-length="1" max-length="248" escape="true"/>
                 <field resource="notes" source-type="string" target="description" target-header="General"
@@ -484,30 +505,42 @@
                        target-header="AWS VM" not-null="true"/>
                 <field resource="aws_hypervisor" source-type="string" target="hypervisor" target-type="string"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="iam_instance_profile" source-type="string" target="iam_instance_profile" target-type="string"  
+                <field resource="iam_instance_profile" source-type="string" target="iam_instance_profile" target-type="string"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="instance_lifecycle" source-type="string" target="instance_lifecycle" target-type="string"
-                       target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/> 
+                       target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="key_name" source-type="string" target="key_name" target-type="string"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="launch_time" source-type="string" target="launch_time" target-type="date" 
+                <field resource="launch_time" source-type="string" target="launch_time" target-type="date"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="monitoring_state" source-type="string" target="monitoring_state" target-type="dropdown"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="ami_launch_index" source-type="string" target="ami_launch_index" target-type="integer" 
+                <field resource="private_dns_name" source-type="string" target="private_dns_name"
+                     target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+		  <field resource="public_dns_name" source-type="string" target="public_dns_name"
+                     target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <field resource="ami_launch_index" source-type="string" target="ami_launch_index" target-type="integer"
                        target-header="AWS VM" not-null="true"/>
-                <field resource="security_groups" source-type="string" target="security_groups" 
-                       target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>  
-                <field resource="private_dns_name" source-type="string" target="private_dns_name" 
+                <field resource="security_groups" source-type="string" target="security_groups"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-		        <field resource="public_dns_name" source-type="string" target="public_dns_name" 
-                       target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>                        
                 <!-- ~AWS VM -->
 
                 <!-- Azure VM -->
                 <field resource="cloud_account" source-type="string" target="subscription_id" target-type="string"
                        target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="hostname" source-type="string" target="computer_name" target-type="string"
+                       target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <field resource="offer" source-type="string" target="offer" target-type="string"
+                       target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <field resource="publisher" source-type="string" target="publisher" target-type="string"
+                       target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <field resource="os_disk_name" source-type="string" target="os_disk_name" target-type="string"
+                       target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <field resource="os_version" source-type="string" target="sku" target-type="string"
+                       target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <field resource="computer_name" source-type="string" target="computer_name" target-type="string"
+                       target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <field resource="resource_uri" source-type="string" target="resource_uri" target-type="string"
                        target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <!-- ~Azure VM -->
 
@@ -579,74 +612,82 @@
             </unmapping>
             <d42url resource="device_pk" source-type="integer" url="{0}/admin/rackraj/device/{1}/" />
         </task>
-        <task enable="true" name="D42 AWS Security Group to Freshservice AWS Security Group" type="AWS Security Group" description="Copy AWS Security Group from Device42 to FreshService" d42_min_version="19.04.00">
+        <task enable="false" name="D42 AWS Subnet to Freshservice AWS Subnet" type="Subnets" description="Copy AWS Subnet from Device42 to FreshService" d42_min_version="19.04.00">
           <api>
             <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
             <resource model="Subnets" target="device42" method="POST" path="services/data/v1.0/query/"
             doql="
             SELECT
-              resource.resource_name                                                     AS name,  
-              resource.identifier                                                        AS item_id,                                                            
-              resource.region                                                            AS region,
-              resource.details ->> 'owner_id'                                            AS owner_id,
-              resource.details ->> 'vpc_id'                                              AS vpc_id,
-              resource.details ->> 'description'                                         AS description,
-              resource.details ->> 'inbound_rule_count'                                  AS inbound_rules_count,
-              resource.details ->> 'outbound_rule_count'                                 AS outbound_rules_count,
-              'AWS'                                                                      AS provider,
-              'AWS Security Group'                                                       AS asset_type,
-              resource.resource_pk                                                       AS device42_id
+              subnet.name                                                              AS name,
+              set_masklen(subnet.network, subnet.mask_bits) || '/' || subnet.mask_bits AS cidr_block,
+              subnet.details ->> 'zone'                                                AS availability_zone,
+              subnet.details ->> 'vendor_subnet_id'                                    AS item_id,
+              subnet.details ->> 'vendor_available_ip_count'                           AS vendor_available_ip_count,
+              subnet.details ->> 'state'                                               AS state,
+              vrfgroup.name                                                            AS vpc_id,
+              infra.account_id                                                         AS owner_id,
+              'AWS'                                                                    AS provider,
+              'AWS Subnet'                                                             AS asset_type,
+              format('Subnet-%s', subnet.subnet_pk)                                    AS device42_id
             FROM
-              view_resource_v2 resource
-            WHERE resource.category @> ARRAY['aws_security_group']
+              view_subnet_v1 subnet
+            JOIN view_vrfgroup_v1 vrfgroup ON subnet.vrfgroup_fk = vrfgroup.vrfgroup_pk
+            JOIN view_cloudinfrastructure_v2 infra ON vrfgroup.cloudinfrastructure_fk = infra.cloudinfrastructure_pk
+            JOIN view_vendor_v1 vendor ON infra.cloud_vendor_fk = vendor.vendor_pk
+            WHERE infra.account_id is not null AND vendor.name = 'Amazon'
             "
             />
           </api>
           <matching>
               <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
           </matching>
-          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
-            <!-- AWS Security Group -->
+          <mapping callback="from_d42" key="name" doql-suffix=" AND subnet.last_changed > '%s'">
+            <!-- AWS Subnet -->
+            <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/>
             <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
-            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Security Group" set-space="true" min-length="1" max-length="248" escape="true"/>
-            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Security Group" not-null="true" error-skip="true"/>
             <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
-            <field resource="region" source-type="string" target="region" target-type="string" target-header="Cloud" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="vpc_id" source-type="string" target="vpc_id" target-header="AWS Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="owner_id" source-type="string" target="owner_id" target-header="AWS Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="description" source-type="string" target="description" target-header="AWS Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="inbound_rules_count" source-type="string" target="inbound_rules_count" target-type="integer" target-header="Security Group" not-null="true"/>
-            <field resource="outbound_rules_count" source-type="string" target="outbound_rules_count" target-type="integer" target-header="Security Group" not-null="true"/>
+            <field resource="availability_zone" source-type="string" target="cd_availability_zone" target-header="Cloud" not-null="true" set-space="true" min-length="1" max-length="255"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Subnet" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Subnet" not-null="true" error-skip="true"/>
+            <field resource="cidr_block" source-type="string" target="cidr_block" target-type="string" target-header="Subnet" not-null="true"/>
+            <field resource="state" source-type="string" target="state" target-type="dropdown" target-header="AWS Subnet" not-null="true"/>
+            <field resource="vendor_available_ip_count" source-type="integer" target="available_ip_address_count" target-type="integer" target-header="AWS Subnet" not-null="true"/>
+            <field resource="vpc_id" source-type="string" target="vpc_id" target-header="AWS Subnet" not-null="true" set-space="true" min-length="1" max-length="255"/>
+            <field resource="owner_id" source-type="string" target="owner_id" target-header="AWS Subnet" not-null="true" set-space="true" min-length="1" max-length="255"/>
           </mapping>
         </task>
+       
 
-        <task enable="true" name="D42 Azure Subscription to Freshservice Azure Subscription" type="Azure Subscription" description="Copy Azure Subscription from Device42 to FreshService" d42_min_version="19.04.00">
+       <task enable="false" name="D42 Azure Subscription to Freshservice Azure Subscription" type="Azure Subscription" description="Copy Azure Subscription from Device42 to FreshService" d42_min_version="19.04.00">
           <api>
             <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
-            <resource model="Subnets" target="device42" method="POST" path="services/data/v1.0/query/"
+            <resource model="cloudinfrastructure" target="device42" method="POST" path="services/data/v1.0/query/"
             doql="
             SELECT
-              resource.resource_name                                                     AS name,
-              resource.identifier                                                        AS item_id,
-              resource.details ->> 'state'                                               AS subscription_state,
-              resource.details ->> 'authorization_source'                                AS authorization_source,
-              resource.details ->> 'tenant'                                              AS tenant,
-              resource.details ->> 'location_placement_id'                               AS location_placement_id,
-              resource.details ->> 'quota_id'                                            AS quota_id,
-              resource.details ->> 'spending_limit'                                      AS spending_limit,
-              'AZURE'                                                                    AS provider,
-              'Azure Subscription'                                                       AS asset_type,
-              format('Resource-%s', resource.resource_pk)                                AS device42_id
+              infra.details ->> 'display_name'                                        AS name,
+              infra.account_id                                                        AS item_id,
+              infra.organization                                                      AS tenant,
+              infra.details ->> 'state'                                               AS subscription_state,
+              infra.details ->> 'authorization_source'                                AS authorization_source,
+              infra.details ->> 'location_placement_id'                               AS location_placement_id,
+              infra.details ->> 'quota_id'                                            AS quota_id,
+              infra.details ->> 'spending_limit'                                      AS spending_limit,
+              'AZURE'                                                                 AS provider,
+              'Azure Subscription'                                                    AS asset_type,
+              format('CloudInfrastructure-%s', infra.cloudinfrastructure_pk)          AS device42_id
             FROM
-              view_resource_v2 resource
-            WHERE resource.category @> ARRAY['azure_subscription']
+              view_cloudinfrastructure_v2 infra
+            LEFT JOIN
+              view_vendor_v1 vendor
+              ON infra.cloud_vendor_fk = vendor.vendor_pk 
+            WHERE vendor.name = 'Microsoft'
             "
             />
           </api>
           <matching>
               <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
           </matching>
-          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+          <mapping callback="from_d42" key="name" doql-suffix=" AND infra.last_changed > '%s'">
             <!-- Azure Subscription -->
             <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/>
             <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
@@ -660,6 +701,66 @@
             <field resource="quota_id" source-type="string" target="quota_id" target-type="string" target-header="Azure Subscription" not-null="true"/>
             <field resource="spending_limit" source-type="string" target="spending_limit" target-type="string" target-header="Azure Subscription" not-null="true"/>
          </mapping>
-        </task>
+       </task>
+
+       <!-- GCP Security Group, AKA GCP Firewall Rules -->
+        <task enable="true" name="D42 GCP Firewall Rules to Freshservice GCP Security Group" type="GCP Security Group" description="Copy GCP Firewall Rules from Device42 to FreshService" d42_min_version="19.04.00">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,  
+              resource.identifier                                                        AS item_id,     
+              'global'                                                                   AS region,
+              resource.details ->> 'description'                                         AS description,
+              resource.details ->> 'network'                                             AS network,
+              (resource.details ->> 'disabled')::boolean                                 AS disabled,
+              resource.details ->> 'priority'                                            AS priority,
+              resource.details ->> 'direction'                                           AS direction,
+              resource.details ->> 'self_link'                                           AS self_link,
+              resource.details ->> 'target_tags'                                         AS target_tags,
+              resource.details ->> 'source_ranges'                                       AS source_ranges,
+              resource.details ->> 'destination_ranges'                                  AS destination_ranges,
+              (resource.details ->> 'created_timestamp')::timestamptz                    AS created_timestamp,
+              resource.details ->> 'inbound_rules_count'                                 AS inbound_rules_count,
+              resource.details ->> 'outbound_rules_count'                                AS outbound_rules_count,
+              resource.details ->> 'log_config_enabled'                                  AS log_config_enabled,
+              resource.details ->> 'allowed_ip_protocols'                                AS allowed_ip_protocols,
+              resource.details ->> 'denied_ip_protocols'                                 AS denied_ip_protocols,
+              'GCP'                                                                      AS provider,
+              'GCP Security Group'                                                       AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            WHERE resource.category @> ARRAY['gcp_firewall_rule']
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <!-- GCP Security Group -->
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Security Group" not-null="true" error-skip="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Security Group" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="inbound_rules_count" source-type="integer" target="inbound_rules_count" target-type="integer" target-header="Security Group" skip-if-null="true"/>
+            <field resource="outbound_rules_count" source-type="integer" target="outbound_rules_count" target-type="integer" target-header="Security Group" skip-if-null="true"/>
+            <field resource="created_timestamp" source-type="date" target="creation_timestamp" target-type="date" target-header="GCP Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
+            <field resource="priority" source-type="string" target="priority" target-type="integer" target-header="GCP Security Group" not-null="true"/>
+            <field resource="direction" source-type="string" target="direction" target-type="string" target-header="GCP Security Group" not-null="true"/>
+            <field resource="disabled" source-type="boolean" target="disabled" target-type="boolean" target-header="GCP Security Group"/>
+            <field resource="self_link" source-type="string" target="self_link" target-type="string" target-header="GCP Security Group" not-null="true"/>
+            <field resource="description" source-type="string" target="description" target-header="GCP Security Group" not-null="true"/>
+            <field resource="source_ranges" source-type="string" target="source_ranges" target-header="GCP Security Group" not-null="true"/>
+            <field resource="destination_ranges" source-type="string" target="destination_ranges" target-header="GCP Security Group" not-null="true"/>
+            <field resource="allowed_ip_protocols" source-type="string" target="allowed_ip_protocols" target-header="GCP Security Group" not-null="true"/>
+            <field resource="denied_ip_protocols" source-type="string" target="denied_ip_protocols" target-header="GCP Security Group" not-null="true"/>
+            <field resource="log_config_enabled" source-type="string" target="log_config_enabled" target-type="string" target-header="GCP Security Group" not-null="true"/>
+         </mapping>
+       </task>
     </tasks>
 </meta>

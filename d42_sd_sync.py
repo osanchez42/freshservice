@@ -284,6 +284,9 @@ def update_objects_from_server(sources, _target, mapping):
                         continue
 
                     value = get_map_value_from_device42(source, map_info)
+  
+                    if "@skip-if-null" in map_info and map_info["@skip-if-null"] and value is None:
+                        continue
 
                     if asset_type_field["asset_type_id"] is not None:
                         data["type_fields"][asset_type_field["name"]] = value
@@ -513,6 +516,9 @@ def update_products_from_server(sources, _target, mapping):
             data = dict()
             for map_info in mapping["field"]:
                 value = get_map_value_from_device42(source, map_info)
+
+                if "@skip-if-null" in map_info and map_info["@skip-if-null"] and value is None:
+                    continue
 
                 # value might have been translated to an associated ID in Freshservice by get_map_value_from_device42
                 #  which is why we need to check that value is a string using isinstance.

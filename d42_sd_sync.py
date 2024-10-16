@@ -80,8 +80,14 @@ def find_object_by_name(assets, name):
 
 def find_object_in_map(objects_map, name):
     if name:
-        return objects_map.get(escape_value(name).lower())
-
+        # check for non-depreacted object first
+        base_type = objects_map.get(escape_value(name).lower())
+        if base_type:
+            return base_type
+        # check for deprecated object
+        deprecated_type = objects_map.get(escape_value(f"{name}-deprecated").lower())
+        if deprecated_type:
+            return deprecated_type
     return None
 
 
@@ -149,23 +155,23 @@ def get_map_value_from_device42(source, map_info, b_add=False, asset_type_id=Non
         else:
             pass
 
-    if "@target-foregin-key" in map_info:
-        target_foregin = map_info["@target-foregin"]
-        if target_foregin not in fs_cache:
-            fs_cache[target_foregin] = freshservice.get_objects_map("api/v2/%s" % target_foregin, target_foregin, map_info["@target-foregin-key"])
+    if "@target-foreign-key" in map_info:
+        target_foreign = map_info["@target-foreign"]
+        if target_foreign not in fs_cache:
+            fs_cache[target_foreign] = freshservice.get_objects_map("api/v2/%s" % target_foreign, target_foreign, map_info["@target-foreign-key"])
 
-        value = find_object_id_in_map(fs_cache[target_foregin], d42_value)
+        value = find_object_id_in_map(fs_cache[target_foreign], d42_value)
         if b_add and value is None and "@not-null" in map_info and map_info["@not-null"]:  # and "@required" in map_info and map_info["@required"]
             if d42_value is not None:
                 if "@max-length" in map_info and len(d42_value) > map_info["@max-length"]:
                     name = d42_value[0:map_info["@max-length"] - 3] + "..."
                 else:
                     name = d42_value
-                if target_foregin in ["vendors", "groups", "agents"]:
-                    new_item = freshservice.insert_and_get_by_name(target_foregin, name, None, map_info["@target-foregin-key"])
+                if target_foreign in ["vendors", "groups", "agents"]:
+                    new_item = freshservice.insert_and_get_by_name(target_foreign, name, None, map_info["@target-foreign-key"])
                 else:
-                    new_item = freshservice.insert_and_get_by_name(target_foregin, name, asset_type_id, map_info["@target-foregin-key"])
-                fs_cache[target_foregin][new_item[map_info["@target-foregin-key"]].lower()] = new_item
+                    new_item = freshservice.insert_and_get_by_name(target_foreign, name, asset_type_id, map_info["@target-foreign-key"])
+                fs_cache[target_foreign][new_item[map_info["@target-foreign-key"]].lower()] = new_item
                 d42_value = new_item["id"]
             else:
                 d42_value = None
@@ -183,19 +189,22 @@ def get_map_value_from_device42(source, map_info, b_add=False, asset_type_id=Non
 
 
 def get_asset_type_field_from_map(asset_type_fields_map, asset_type_id, asset_type_fields, map_info):
-    if asset_type_id not in asset_type_fields_map:
-        asset_type_fields_map[asset_type_id] = dict()
+    try:
+        if asset_type_id not in asset_type_fields_map:
+            asset_type_fields_map[asset_type_id] = dict()
 
-    target_header = map_info["@target-header"] if "@target-header" in map_info else ""
-    key = map_info["@resource"] + "-" + target_header
-    if key in asset_type_fields_map[asset_type_id]:
-        asset_type_field = asset_type_fields_map[asset_type_id][key]
-    else:
-        asset_type_field = get_asset_type_field(asset_type_fields, map_info)
-        asset_type_fields_map[asset_type_id][key] = asset_type_field
+        target_header = map_info["@target-header"] if "@target-header" in map_info else ""
+        key = map_info["@resource"] + "-" + target_header
+        if key in asset_type_fields_map[asset_type_id]:
+            asset_type_field = asset_type_fields_map[asset_type_id][key]
+        else:
+            asset_type_field = get_asset_type_field(asset_type_fields, map_info)
+            asset_type_fields_map[asset_type_id][key] = asset_type_field
 
-    return asset_type_field
-
+        return asset_type_field
+    except Exception as e:
+        log = "Error (%s) getting asset type field %s" % (str(e), map_info["@target"])
+        logger.exception(log)
 
 def submit_relationship_create_job(relationships_to_create):
     logger.info("adding relationship create job")
@@ -328,7 +337,7 @@ def update_objects_from_server(sources, _target, mapping):
                             else:
                                 value = " "
 
-                    if "@target-foregin-key" in map_info:
+                    if "@target-foreign-key" in map_info:
                         value = get_map_value_from_device42(source, map_info, True, data["asset_type_id"])
                         is_valid = value is not None
                     if "@target-type" in map_info and value is not None:
@@ -942,7 +951,7 @@ def update_contracts_from_server(sources, _target, mapping):
                     if error_skip and "@error-skip" in map_info and map_info["@error-skip"]:
                         continue
 
-                    if "@target-foregin-key" in map_info and map_info["@target-foregin"] == "applications":
+                    if "@target-foreign-key" in map_info and map_info["@target-foreign"] == "applications":
                         existing_software = find_object_in_map(existing_softwares_map, source[map_info["@resource"]])
                         value = existing_software["id"]
                     else:
@@ -1011,7 +1020,7 @@ def update_contracts_from_server(sources, _target, mapping):
                         else:
                             value = 0.01
 
-                    if "@target-foregin-key" in map_info and value is not None and isinstance(value, str):
+                    if "@target-foreign-key" in map_info and value is not None and isinstance(value, str):
                         value = get_map_value_from_device42(source, map_info, True)
                         is_valid = value is not None
                     if "@target-type" in map_info and value is not None:

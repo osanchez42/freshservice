@@ -358,17 +358,19 @@ def update_objects_from_server(sources, _target, mapping):
                                 
                         elif target_type == "dropdown":
                             try:
-                                option = None
-                                for choice in asset_type_field["choices"]:
-                                    d42_value = value.lower()
-                                    choice_value = choice[0].lower()
-                                    if d42_value in choice_value or choice_value in d42_value:
-                                        option = choice[0]
-                                        break
-                                if option is None:
-                                    is_valid = False
-                                else:
-                                    value = option
+                                # Only try to find an option if we have a value and that value is not spaces.
+                                if value and value.strip():
+                                    option = None
+                                    for choice in asset_type_field["choices"]:
+                                        d42_value = value.lower()
+                                        choice_value = choice[0].lower()
+                                        if d42_value == choice_value:
+                                            option = choice[0]
+                                            break
+                                    if option is None:
+                                        is_valid = False
+                                    else:
+                                        value = option
                             except Exception as e:
                                 logger.exception(str(e))
                                 is_valid = False

@@ -1,6 +1,6 @@
 <meta>
     <tasks>
-        <task enable="true" name="Products" type="product" description="Copy Product info from Device42 to FreshService" d42_min_version="16.19.00">
+       <task enable="true" name="Products" type="product" description="Copy Product info from Device42 to FreshService" d42_min_version="16.19.00">
             <api>
                 <target model="products" target="freshservice" method="POST" update_method="PUT" path="api/v2/products" asset-type="Hardware"/>
                 <resource target="device42" method="POST"
@@ -23,10 +23,10 @@
 
         <task enable="true" name="Devices" description="Copy Servers from Device42 to FreshService using DOQL v2" d42_min_version="19.03.00">
             <api>
-                <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
-                <resource model="Devices" target="device42" method="POST" path="services/data/v1.0/query/"
+                <target model="products" target="freshservice" method="POST" update_method="PUT" path="api/v2/products"/>
+                <resource target="device42" method="POST" path="services/data/v1.0/query/"
                           doql="
-                            WITH
+                                WITH
                                 devicelastlogin AS (
                                     with sub as ( SELECT dll.device_fk, dll.username, dll.domain, dll.sid, ROW_NUMBER() OVER(PARTITION BY dll.device_fk ORDER BY dll.last_login DESC, dll.devicelastlogin_pk DESC) AS rank FROM view_devicelastlogin_v1 dll )
                                     SELECT sub.*, (select email from view_enduser_v1 enduser where enduser.details->>'sid' = sub.sid limit 1) as enduser_email  FROM sub  WHERE rank = 1 )
@@ -99,21 +99,6 @@
                                 ,total_costs as (
                                     select device_fk, sum(cost) as cost from view_purchaselineitem_v1 left join view_purchaselineitems_to_devices_v1 on purchaselineitem_fk = purchaselineitem_pk  group by device_fk)
 
-                                ,snmp_device_first_mac_address as (
-                                    select
-                                        n.device_fk,
-                                        concat_ws(':', left(trim(n.hwaddress), 2), substring(trim(n.hwaddress), 3, 2), substring(trim(n.hwaddress), 5, 2), substring(trim(n.hwaddress), 7, 2), substring(trim(n.hwaddress), 9, 2), right(trim(n.hwaddress), 2)) as mac_address
-                                    from view_netport_v1 n
-                                    where n.netport_pk in (
-                                        select min(n.netport_pk) as netport_pk
-                                        from view_netport_v1 n
-                                        inner join view_discoveryscores_v1 ds on n.device_fk = ds.device_fk
-                                        inner join view_jobscore_v1 js on ds.jobscore_fk = js.jobscore_pk
-                                        where n.device_fk is not null and n.hwaddress is not null and length(trim(n.hwaddress)) = 12 and js.snmpdiscovery_fk is not null
-                                        group by n.device_fk
-                                    )
-                                )
-
                                 ,network_hw as (
                                     select device_fk,
                                         string_agg(
@@ -153,39 +138,7 @@
                                     select dr.device_fk, string_agg(resource.resource_name, ', ' order by resource.resource_name) as mountpoint
                                     from view_deviceresource_v1 dr left join view_resource_v2 resource on resource.resource_pk=dr.resource_fk where dr.relation = 'Mountpoint' group by dr.device_fk)
 
-                                select
-                                CASE
-	                                WHEN (lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'gce') OR
-	                                     (lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'amazon ec2 instance') OR
-	                                     (lower(view_device_v2.type) = 'virtual' AND (lower(view_device_v2.virtualsubtype) = 'azure virtual machine' OR lower(view_device_v2.virtualsubtype) = 'azure cloud service'))
-	                                    THEN
-                                            CASE
-                                                WHEN position('/' IN view_device_v2.name) > 0 THEN
-                                                    substring(view_device_v2.name FROM position('/' IN view_device_v2.name) + 1)
-                                                ELSE
-                                                    CASE
-                                                        WHEN ci.instance_name is null or ci.instance_name = '' then view_device_v2.name
-                                                        ELSE ci.instance_name
-                                                    END
-                                            END
-                                    ELSE
-                                        case
-                                            when ci.instance_name is null or ci.instance_name = '' then view_device_v2.name
-                                            else ci.instance_name
-                                        end
-                                    END as name,
-                                    view_device_v2.serial_no,
-                                    view_device_v2.uuid,
-                                    view_device_v2.asset_no,
-                                    view_device_v2.in_service,
-                                    view_device_v2.os_name,
-                                    view_device_v2.os_version,
-                                    view_device_v2.datacenter,
-                                    view_device_v2.last_discovered,
-                                    view_device_v2.notes,
-                                    view_device_v2.type as device_type,
-                                    view_device_v2.physicalsubtype,
-                                    view_device_v2.virtualsubtype,
+                                select view_device_v2.*,
                                     case
                                         WHEN view_device_v2.virtual_host AND lower(view_device_v2.os_name) like '%esxi%' THEN 'VMware VCenter Host'
                                         WHEN view_device_v2.virtual_host THEN 'Host'
@@ -194,8 +147,7 @@
                                         WHEN lower(view_device_v2.type) = 'physical' AND lower(view_device_v2.physicalsubtype) = 'network printer' THEN 'Printer'
                                         WHEN lower(view_device_v2.type) = 'physical' AND lower(view_device_v2.physicalsubtype) = 'router' THEN 'Router'
                                         WHEN lower(view_device_v2.type) = 'physical' AND lower(view_device_v2.physicalsubtype) = 'firewall' THEN 'Firewall'
-                                        WHEN lower(view_device_v2.type) = 'physical' AND lower(view_device_v2.os_name) similar to '%(f5|netscaler)%' THEN 'Computer'
-                                        WHEN lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.os_name) similar to '%(f5|netscaler)%' THEN 'Load Balancer'
+                                        WHEN lower(view_device_v2.os_name) similar to '%(f5|netscaler)%' THEN 'Load Balancer'
                                         WHEN view_device_v2.network_device THEN 'Switch'
                                         WHEN lower(view_device_v2.type) = 'physical' AND lower(view_device_v2.os_name) similar to '%(windows|microsoft)%' AND lower(view_device_v2.os_name) like '%server%' THEN 'Windows Server'
                                         WHEN lower(view_device_v2.type) = 'physical' AND lower(view_device_v2.os_name) similar to '%(unix|z/os|z os|zos|hp-ux|os400|os/400|os 400|linux|amazon|ubuntu|centos|redhat|debian|sles|suse|gentoo|oracle|freebsd|rhel|red hat|fedora|alma|rocky|arch)%' THEN 'Unix Server'
@@ -204,10 +156,8 @@
                                         WHEN lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'vmware' THEN 'VMware VCenter VM'
                                         WHEN lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'amazon ec2 instance' THEN 'AWS VM'
                                         WHEN lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'azure virtual machine' THEN 'Azure VM'
-                                        WHEN lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'gce' THEN 'GCP VM'
-                                        WHEN lower(view_device_v2.type) = 'virtual' AND lower(ci.service_name) = 'azure load balancer' THEN 'Azure LB'
                                         WHEN lower(view_device_v2.type) = 'physical' THEN 'Server'
-                                        WHEN lower(view_device_v2.type) = 'virtual' THEN 'Server'
+                                        WHEN lower(view_device_v2.type) = 'virtual' THEN 'Virtual Machine'
                                         ELSE 'Computer'
                                     END as asset_type,
                                     coalesce(view_device_v2.physicalsubtype, view_device_v2.virtualsubtype) as device_subtype,
@@ -249,17 +199,15 @@
                                     case when devicelastlogin.enduser_email is not null then devicelastlogin.enduser_email
                                           else devicelastlogin.username end as last_login_by,
                                     CASE
-                                      WHEN (lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'amazon ec2 instance') AND LENGTH(ci.location) > 0 THEN substr(ci.location, 1, length(ci.location) - 1)
+                                      WHEN (lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'amazon ec2 instance') THEN substr(ci.location, 1, length(ci.location) - 1)
                                       WHEN (lower(view_device_v2.type) = 'virtual' AND (lower(view_device_v2.virtualsubtype) = 'azure virtual machine'
                                                                                                          OR lower(view_device_v2.virtualsubtype) = 'azure cloud service')) THEN ci.details->>'region_name'
-                                      WHEN lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'gce' AND LENGTH(ci.location) > 0 THEN substr(ci.location, 1, length(ci.location) - 2)
                                       ELSE NULL
                                     END AS cloud_instance_region,
                                     CASE
                                       WHEN (lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'amazon ec2 instance') THEN ci.location
                                       WHEN (lower(view_device_v2.type) = 'virtual' AND (lower(view_device_v2.virtualsubtype) = 'azure virtual machine'
                                                                                                          OR lower(view_device_v2.virtualsubtype) = 'azure cloud service')) THEN NULL
-                                      WHEN lower(view_device_v2.type) = 'virtual' AND lower(view_device_v2.virtualsubtype) = 'gce' AND LENGTH(ci.location) > 0 THEN ci.location
                                       ELSE NULL
                                     END AS cloud_instance_location,
                                     ci.instance_type as cloud_instance_type,
@@ -290,7 +238,7 @@
                                             or lower(civ.name) like '%alibaba%' then 'Alibaba Cloud'
                                         else null
                                     end as cloud_vendor,
-                                    lower(ci.instance_id) as cloud_instance_id,
+                                    ci.instance_id as cloud_instance_id,
                                     ci.instance_name as cloud_instance_name,
                                     ci.status as cloud_instance_status,
                                     device_cluster.device_cluster_name as device_cluster_name,
@@ -316,24 +264,7 @@
                                     view_device_v2.details ->> 'os_disk_name' AS os_disk_name,
                                     view_device_v2.details ->> 'computer_name' AS computer_name,
                                     view_device_v2.details ->> 'resource_uri' AS resource_uri,
-                                    view_device_v2.details ->> 'resource_group' AS resource_group,
-                                    view_device_v2.details ->> 'resource_type' AS resource_type,
-                                    view_device_v2.details ->> 'sku_name' AS sku_name,
-                                    view_device_v2.details ->> 'sku_tier' AS sku_tier,
-                                    view_device_v2.details ->> 'provisioning_state' AS provisioning_state,
-                                    view_device_v2.details ->> 'creation_timestamp' as creation_timestamp,
-                                    view_device_v2.details ->> 'self_link' as self_link,
-                                    view_device_v2.details ->> 'on_host_maintenance' as on_host_maintenance,
-                                    view_device_v2.details ->> 'automatic_restart' as automatic_restart,
-                                    (view_device_v2.details ->> 'preemptible')::boolean as preemptible,
-                                    (view_device_v2.details ->> 'deletion_protection')::boolean as deletion_protection,
-                                    CASE view_device_v2.details ->> 'start_restricted'
-                                        WHEN 'true' THEN 'Yes'
-                                        WHEN 'false' THEN 'No'
-                                        ELSE NULL
-                                    END AS start_restricted,
-                                    view_device_v2.details ->> 'last_start_timestamp' as last_start_timestamp,
-                                     mount_point.mountpoint as mountpoint,
+                                    mount_point.mountpoint as mountpoint,
                                     CONCAT_WS(' ',  view_device_v2.os_name, view_device_v2.os_version, view_device_v2.os_version_no) as hypervisor,
                                     hv.name as hardware_vendor,
                                     virtual_host_device.datacenter as host_datacenter,
@@ -346,8 +277,7 @@
                                     view_device_v2.details ->> 'intune_id' AS intune_id,
                                     view_device_v2.details ->> 'airwatch_id' AS airwatch_id,
                                     view_device_v2.details ->> 'automox_id' AS automox_id,
-                                    format('Device-%s', view_device_v2.device_pk) as device42_id,
-                                    sdfma.mac_address as snmp_device_mac_address
+                                    format('Device-%s', view_device_v2.device_pk) as device42_id
                                 FROM view_device_v2
                                 LEFT JOIN view_hardware_v2          on view_device_v2.hardware_fk   = view_hardware_v2.hardware_pk
                                 LEFT JOIN network_ip                on view_device_v2.device_pk     = network_ip.device_fk
@@ -367,24 +297,27 @@
                                 LEFT JOIN view_device_v2 as virtual_host_device     ON view_device_v2.virtual_host_device_fk     = virtual_host_device.device_pk
                                 LEFT JOIN device_cluster as host_device_cluster     ON virtual_host_device.device_pk     = host_device_cluster.device_fk
                                 LEFT JOIN network_port_count        ON view_device_v2.device_pk     = network_port_count.device_fk
-                                LEFT OUTER JOIN snmp_device_first_mac_address sdfma ON view_device_v2.device_pk = sdfma.device_fk
-                                                              "
+                               "
                         />
             </api>
             <matching>
                 <source-1 device42-id="device42_id" name="name" serial-number="serial_no" uuid="uuid" item-id="cloud_instance_id"/>
             </matching>
             <mapping callback="from_d42" key="name" source="Devices" doql-suffix=" where view_device_v2.last_edited>'%s' ">
-<!-- D42 Specific -->
-                <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/>
-<!--                <field resource="intune_id" source-type="string" target="source_asset_ids" target-field="intune_id" target-type="dict"/>-->
-<!--                <field resource="airwatch_id" source-type="string" target="source_asset_ids" target-field="airwatch_id" target-type="dict"/>-->
-<!--                <field resource="automox_id" source-type="string" target="source_asset_ids" target-field="automox_id" target-type="dict"/>-->
+                <!-- D42 Specific -->
+                <!-- commented out for github script, but these are live on proxy -->
+                <!-- <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/> -->
+                <!-- <field resource="intune_id" source-type="string" target="source_asset_ids" target-field="intune_id" target-type="dict"/> -->
+                <!-- <field resource="airwatch_id" source-type="string" target="source_asset_ids" target-field="airwatch_id" target-type="dict"/> -->
+                <!-- <field resource="automox_id" source-type="string" target="source_asset_ids" target-field="automox_id" target-type="dict"/> -->
+                <!-- -->
                 <!-- ~D42 Specific -->
 
                 <!--  General -->
+                <!--
                 <field resource="asset_no" source-type="string" target="asset_tag" target-type="string"
                        target-header="General" not-null="true" min-length="1" max-length="255"/>
+                -->
                 <field resource="name" source-type="string" target="name" target-type="string" target-header="General"
                        set-space="true" min-length="1" max-length="248" escape="true"/>
                 <field resource="notes" source-type="string" target="description" target-header="General"
@@ -409,32 +342,25 @@
                 <field resource="warranty_months" source-type="integer" target="warranty" target-type="integer"
                        target-header="Hardware" not-null="true"/>
                 <field resource="warranty_end_date" source-type="string" target="warranty_expiry_date" target-type="date"
-                       target-header="Hardware" not-null="true"/>
+                       target-header="Hardware" not-null="true" skip-if-null="true"/>
                 <field resource="acquisition_date" source-type="string" target="acquisition_date" target-type="date"
-                       target-header="Hardware" not-null="true"/>
+                       target-header="Hardware" not-null="true" skip-if-null="true"/>
                 <field resource="domain_name" source-type="string" target="domain" target-type="string"
                        target-header="Hardware" not-null="true" required="True" max-length="255"
                 />
                 <field resource="last_discovered" source-type="string" target="last_audit_date" target-type="date"
                        target-header="Hardware" not-null="true"/>
-                <field resource="cost" type="float" target="cost"
-                       target-header="Hardware" target-type="float" not-null="true" set-zero="true"/>
-                <field resource="cloud_instance_region" source-type="string" target="region" target-type="dropdown"
-                       target-header="Hardware" not-null="true" min-length="1" max-length="255"/>
-                <field resource="cloud_instance_location" source-type="string" target="availability_zone" target-type="dropdown"
-                       target-header="Hardware" not-null="true" min-length="1" max-length="255"/>
-                <field resource="device_type" source-type="string" target="compute_type" target-type="dropdown"
-                       target-header="Hardware" not-null="true"/>
-                <field resource="physicalsubtype" source-type="string" target="physical_subtype" target-type="dropdown"
-                       target-header="Hardware" not-null="true"/>
-                <field resource="virtualsubtype" source-type="string" target="virtual_subtype" target-type="dropdown"
-                       target-header="Hardware" not-null="true"/>
-                <!-- Temporally don't map the vendor, because there is no way to sync the products and vendors using api right now.
+                <!-- cannot be mapped currently
                 <field resource="purchase_order_vendor" source-type="string" target="vendor" target-type="string"
                        target-header="Hardware"
                        target-foreign="vendors" target-foreign-key="name" not-null="true" required="True" max-length="255"/>
-                       -->
+                -->
                 <!--  ~Hardware -->
+
+                <!--  Cost -->
+                <field resource="cost" type="float" target="cost"
+                       target-header="Cost" target-type="float" not-null="true" set-zero="true"/>
+                <!--  ~Cost -->
 
                 <!--  Computer -->
                 <field resource="uuid" type="string" target="uuid"
@@ -463,21 +389,6 @@
                        target-header="Computer" not-null="true" />
                 <field resource="disk_size" source-type="integer" target="disk_space" target-type="integer"
                        target-header="Computer" not-null="true" />
-                <field resource="cloud_vendor" source-type="string" target="provider_type" target-type="string"
-                       target-header="Computer" not-null="true"/>
-                <field resource="cloud_instance_status" source-type="string" target="state" target-type="string"
-                       target-header="Computer">
-                    <value-mapping default="Unknown">
-                        <item key="Running" value="Powered On"/>
-                        <item key="Stopped" value="Powered Off"/>
-                    </value-mapping>
-                </field>
-                <field resource="cloud_instance_id" source-type="string" target="item_id" target-type="string"
-                       target-header="Computer" not-null="true" error-skip="true"/>
-                <field resource="cloud_instance_name" source-type="string" target="item_name" target-type="string"
-                       target-header="Computer" not-null="true"/>
-                <field resource="cloud_instance_type" source-type="string" target="cd_instance_type" target-type="dropdown"
-                       target-header="Computer" not-null="true" min-length="1" max-length="255"/>
                 <!--  ~Computer -->
 
                 <!--  Cloud -->
@@ -493,6 +404,29 @@
                        target-header="Cloud" not-null="true"/>
                 <!--  ~Cloud -->
 
+                <!--  Host -->
+                <field resource="cloud_instance_id" source-type="string" target="item_id" target-type="string"
+                       target-header="Host" not-null="true" error-skip="true"/>
+                <field resource="cloud_instance_name" source-type="string" target="item_name" target-type="string"
+                       target-header="Host" not-null="true"/>
+                <field resource="ramsize" source-type="float" target="memory_size" target-type="float"
+                       target-header="Host" not-null="true" />
+                <field resource="total_cpucore" source-type="integer" target="cpu_core_count" target-type="integer"
+                       not-null="true"
+                       target-header="Host"/>
+                <field resource="disk_size" source-type="integer" target="total_disk_size" target-type="integer"
+                       target-header="Host" not-null="true" />
+                <field resource="cloud_instance_status" source-type="string" target="state" target-type="string"
+                       target-header="Host">
+                    <value-mapping default="Unknown">
+                        <item key="Running" value="Powered On"/>
+                        <item key="Stopped" value="Powered Off"/>
+                    </value-mapping>
+                </field>
+                <field resource="ip_address" type="string" target="ip_address"
+                       target-header="Host" not-null="true" max-length="255"/>
+                <!--  ~Host -->
+
                 <!--  VMware VCenter Host -->
                 <field resource="datacenter" type="string" target="datacenter"
                        target-header="VMware VCenter Host" not-null="true" max-length="255"/>
@@ -502,19 +436,53 @@
                        target-header="VMware VCenter Host" not-null="true" max-length="255"/>
                 <field resource="hypervisor" type="string" target="hypervisor"
                        target-header="VMware VCenter Host" not-null="true" max-length="255"/>
+                <field resource="cpuspeed" source-type="float" target="cpu_speed" target-type="float"
+                       target-header="VMware VCenter Host" not-null="true"/>
                 <field resource="os_name" source-type="string" target="os_type" target-type="string"
                        target-header="VMware VCenter Host" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="uuid" type="string" target="instance_uuid"
                        target-header="VMware VCenter Host" not-null="true" set-space="true"
                        min-length="1" max-length="255"/>
+                <field resource="serial_no" source-type="string" target="cd_serial_number" target-type="string"
+                       target-header="VMware VCenter Host" not-null="true" set-space="true"
+                       min-length="1" max-length="255" error-skip="true"/>
                 <field resource="hardware_vendor" source-type="string" target="hardware_vendor" target-type="string"
                        target-header="VMware VCenter Host" not-null="true" set-space="true"
                        min-length="1" max-length="255" error-skip="true"/>
                 <!--  ~VMware VCenter Host -->
 
+                <!--  Virtual Machine -->
+                <field resource="cloud_instance_id" source-type="string" target="item_id" target-type="string"
+                       target-header="Virtual Machine" not-null="true" error-skip="true"/>
+                <field resource="cloud_instance_name" source-type="string" target="item_name" target-type="string"
+                       target-header="Virtual Machine" not-null="true"/>
+                <field resource="cloud_instance_type" source-type="string" target="cd_instance_type" target-type="dropdown"
+                       target-header="Virtual Machine" not-null="true" min-length="1" max-length="255"/>
+                <field resource="public_ip_address" type="string" target="public_address"
+                       target-header="Virtual Machine" not-null="true" max-length="255"/>
+                <field resource="private_ip_address" type="string" target="private_address"
+                       target-header="Virtual Machine" not-null="true" max-length="255"/>
+                <field resource="cloud_instance_status" source-type="string" target="vm_state" target-type="string"
+                       target-header="Virtual Machine">
+                    <value-mapping default="Unknown">
+                        <item key="Running" value="Running"/>
+                        <item key="Stopped" value="Stopped"/>
+                    </value-mapping>
+                </field>
+                <field resource="os_name" source-type="string" target="os_name" target-type="string"
+                       target-header="Virtual Machine" not-null="true" set-space="true" min-length="1" max-length="255"/>
+                <!-- ~Virtual Machine -->
+
                 <!-- VMWare VCenter VM -->
+                <field resource="hostname" source-type="string" target="hostname" target-type="string"
+                       target-header="VMware VCenter VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="mountpoint" type="string" target="datastore"
                        target-header="VMware VCenter VM" not-null="true" max-length="255"/>
+                <field resource="ramsize" source-type="float" target="memory_size" target-type="float"
+                       target-header="VMware VCenter VM" not-null="true" />
+                <field resource="total_cpucore" source-type="integer" target="num_of_cpu" target-type="integer"
+                       not-null="true"
+                       target-header="VMware VCenter VM"/>
                 <field resource="uuid" type="string" target="instance_uuid"
                        target-header="VMware VCenter VM" not-null="true" set-space="true"
                        min-length="1" max-length="255"/>
@@ -532,7 +500,7 @@
                 <field resource="cloud_image_id" source-type="string" target="image_id" target-type="string"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="cloud_os_platform" source-type="string" target="platform" target-type="dropdown"
-                       target-header="AWS VM" not-null="true"/>
+                       target-header="AWS VM"/>
                 <field resource="subnet_id" source-type="string" target="subnet_id" target-type="string"
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="vpc_id" source-type="string" target="vpc_id" target-type="string"
@@ -553,7 +521,7 @@
                        target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="private_dns_name" source-type="string" target="private_dns_name"
                      target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-		            <field resource="public_dns_name" source-type="string" target="public_dns_name"
+		  <field resource="public_dns_name" source-type="string" target="public_dns_name"
                      target-header="AWS VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <field resource="ami_launch_index" source-type="string" target="ami_launch_index" target-type="integer"
                        target-header="AWS VM" not-null="true"/>
@@ -579,42 +547,6 @@
                 <field resource="resource_uri" source-type="string" target="resource_uri" target-type="string"
                        target-header="Azure VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
                 <!-- ~Azure VM -->
-
-                <!-- GCP VM -->
-                <field resource="creation_timestamp" source-type="string" target="creation_timestamp" target-type="date"
-                       target-header="GCP VM" not-null="true"/>
-                <field resource="on_host_maintenance" source-type="string" target="on_host_maintenance" target-type="dropdown"
-                       target-header="GCP VM" not-null="true" />
-                <field resource="automatic_restart" source-type="boolean" target="automatic_restart" target-type="boolean"
-                       target-header="GCP VM" not-null="true"/>
-                <field resource="preemptible" source-type="boolean" target="preemptible" target-type="boolean"
-                       target-header="GCP VM" not-null="true"/>
-                <field resource="start_restricted" source-type="string" target="start_restricted" target-type="string"
-                       target-header="GCP VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="last_start_timestamp" source-type="string" target="last_start_timestamp" target-type="date"
-                       target-header="GCP VM" not-null="true"/>
-                <field resource="self_link" source-type="string" target="self_link" target-type="string"
-                       target-header="GCP VM" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="deletion_protection" source-type="boolean" target="deletion_protection" target-type="boolean"
-                       target-header="GCP VM" not-null="true"/>
-                <!-- GCP VM -->
-
-                <!-- Azure LB -->
-                <field resource="resource_uri" source-type="string" target="resource_uri" target-type="string"
-                       target-header="Azure LB" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="resource_type" source-type="string" target="resource_type" target-type="string"
-                       target-header="Azure LB" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="provisioning_state" source-type="string" target="cd_provisioning_state" target-type="string"
-                        target-header="Azure LB" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="sku_name" source-type="string" target="cd_sku_name" target-type="string"
-                       target-header="Azure LB" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="sku_tier" source-type="string" target="sku_tier" target-type="string"
-                       target-header="Azure LB" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="resource_group" source-type="string" target="resource_group" target-type="string"
-                       target-header="Azure LB" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <field resource="cloud_account" source-type="string" target="subscription_id" target-type="string"
-                       target-header="Azure LB" not-null="true" set-space="true" min-length="1" max-length="255"/>
-                <!-- ~Azure LB -->
 
                 <!-- Printer -->
                 <field resource="ip_address" type="string" target="ip_address"
@@ -684,74 +616,82 @@
             </unmapping>
             <d42url resource="device_pk" source-type="integer" url="{0}/admin/rackraj/device/{1}/" />
         </task>
-        <task enable="true" name="D42 AWS Security Group to Freshservice AWS Security Group" type="AWS Security Group" description="Copy AWS Security Group from Device42 to FreshService" d42_min_version="19.04.00">
+        <task enable="false" name="D42 AWS Subnet to Freshservice AWS Subnet" type="Subnets" description="Copy AWS Subnet from Device42 to FreshService" d42_min_version="19.04.00">
           <api>
             <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
             <resource model="Subnets" target="device42" method="POST" path="services/data/v1.0/query/"
             doql="
             SELECT
-              resource.resource_name                                                     AS name,  
-              resource.identifier                                                        AS item_id,                                                            
-              resource.region                                                            AS region,
-              resource.details ->> 'owner_id'                                            AS owner_id,
-              resource.details ->> 'vpc_id'                                              AS vpc_id,
-              resource.details ->> 'description'                                         AS description,
-              resource.details ->> 'inbound_rule_count'                                  AS inbound_rules_count,
-              resource.details ->> 'outbound_rule_count'                                 AS outbound_rules_count,
-              'AWS'                                                                      AS provider,
-              'AWS Security Group'                                                       AS asset_type,
-              resource.resource_pk                                                       AS device42_id
+              subnet.name                                                              AS name,
+              set_masklen(subnet.network, subnet.mask_bits) || '/' || subnet.mask_bits AS cidr_block,
+              subnet.details ->> 'zone'                                                AS availability_zone,
+              subnet.details ->> 'vendor_subnet_id'                                    AS item_id,
+              subnet.details ->> 'vendor_available_ip_count'                           AS vendor_available_ip_count,
+              subnet.details ->> 'state'                                               AS state,
+              vrfgroup.name                                                            AS vpc_id,
+              infra.account_id                                                         AS owner_id,
+              'AWS'                                                                    AS provider,
+              'AWS Subnet'                                                             AS asset_type,
+              format('Subnet-%s', subnet.subnet_pk)                                    AS device42_id
             FROM
-              view_resource_v2 resource
-            WHERE resource.category @> ARRAY['aws_security_group']
+              view_subnet_v1 subnet
+            JOIN view_vrfgroup_v1 vrfgroup ON subnet.vrfgroup_fk = vrfgroup.vrfgroup_pk
+            JOIN view_cloudinfrastructure_v2 infra ON vrfgroup.cloudinfrastructure_fk = infra.cloudinfrastructure_pk
+            JOIN view_vendor_v1 vendor ON infra.cloud_vendor_fk = vendor.vendor_pk
+            WHERE infra.account_id is not null AND vendor.name = 'Amazon'
             "
             />
           </api>
           <matching>
               <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
           </matching>
-          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
-            <!-- AWS Security Group -->
+          <mapping callback="from_d42" key="name" doql-suffix=" AND subnet.last_changed > '%s'">
+            <!-- AWS Subnet -->
+            <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/>
             <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
-            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Security Group" set-space="true" min-length="1" max-length="248" escape="true"/>
-            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Security Group" not-null="true" error-skip="true"/>
             <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
-            <field resource="region" source-type="string" target="region" target-type="string" target-header="Cloud" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="vpc_id" source-type="string" target="vpc_id" target-header="AWS Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="owner_id" source-type="string" target="owner_id" target-header="AWS Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="description" source-type="string" target="description" target-header="AWS Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
-            <field resource="inbound_rules_count" source-type="string" target="inbound_rules_count" target-type="integer" target-header="Security Group" not-null="true"/>
-            <field resource="outbound_rules_count" source-type="string" target="outbound_rules_count" target-type="integer" target-header="Security Group" not-null="true"/>
+            <field resource="availability_zone" source-type="string" target="cd_availability_zone" target-header="Cloud" not-null="true" set-space="true" min-length="1" max-length="255"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Subnet" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Subnet" not-null="true" error-skip="true"/>
+            <field resource="cidr_block" source-type="string" target="cidr_block" target-type="string" target-header="Subnet" not-null="true"/>
+            <field resource="state" source-type="string" target="state" target-type="dropdown" target-header="AWS Subnet" not-null="true"/>
+            <field resource="vendor_available_ip_count" source-type="integer" target="available_ip_address_count" target-type="integer" target-header="AWS Subnet" not-null="true"/>
+            <field resource="vpc_id" source-type="string" target="vpc_id" target-header="AWS Subnet" not-null="true" set-space="true" min-length="1" max-length="255"/>
+            <field resource="owner_id" source-type="string" target="owner_id" target-header="AWS Subnet" not-null="true" set-space="true" min-length="1" max-length="255"/>
           </mapping>
         </task>
+       
 
-        <task enable="true" name="D42 Azure Subscription to Freshservice Azure Subscription" type="Azure Subscription" description="Copy Azure Subscription from Device42 to FreshService" d42_min_version="19.04.00">
+       <task enable="false" name="D42 Azure Subscription to Freshservice Azure Subscription" type="Azure Subscription" description="Copy Azure Subscription from Device42 to FreshService" d42_min_version="19.04.00">
           <api>
             <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
-            <resource model="Subnets" target="device42" method="POST" path="services/data/v1.0/query/"
+            <resource model="cloudinfrastructure" target="device42" method="POST" path="services/data/v1.0/query/"
             doql="
             SELECT
-              resource.resource_name                                                     AS name,
-              resource.identifier                                                        AS item_id,
-              resource.details ->> 'state'                                               AS subscription_state,
-              resource.details ->> 'authorization_source'                                AS authorization_source,
-              resource.details ->> 'tenant'                                              AS tenant,
-              resource.details ->> 'location_placement_id'                               AS location_placement_id,
-              resource.details ->> 'quota_id'                                            AS quota_id,
-              resource.details ->> 'spending_limit'                                      AS spending_limit,
-              'AZURE'                                                                    AS provider,
-              'Azure Subscription'                                                       AS asset_type,
-              format('Resource-%s', resource.resource_pk)                                AS device42_id
+              infra.details ->> 'display_name'                                        AS name,
+              infra.account_id                                                        AS item_id,
+              infra.organization                                                      AS tenant,
+              infra.details ->> 'state'                                               AS subscription_state,
+              infra.details ->> 'authorization_source'                                AS authorization_source,
+              infra.details ->> 'location_placement_id'                               AS location_placement_id,
+              infra.details ->> 'quota_id'                                            AS quota_id,
+              infra.details ->> 'spending_limit'                                      AS spending_limit,
+              'AZURE'                                                                 AS provider,
+              'Azure Subscription'                                                    AS asset_type,
+              format('CloudInfrastructure-%s', infra.cloudinfrastructure_pk)          AS device42_id
             FROM
-              view_resource_v2 resource
-            WHERE resource.category @> ARRAY['azure_subscription']
+              view_cloudinfrastructure_v2 infra
+            LEFT JOIN
+              view_vendor_v1 vendor
+              ON infra.cloud_vendor_fk = vendor.vendor_pk 
+            WHERE vendor.name = 'Microsoft'
             "
             />
           </api>
           <matching>
               <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
           </matching>
-          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+          <mapping callback="from_d42" key="name" doql-suffix=" AND infra.last_changed > '%s'">
             <!-- Azure Subscription -->
             <field resource="device42_id" source-type="string" target="device42_id" target-type="string" target-header="General"/>
             <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
@@ -765,6 +705,171 @@
             <field resource="quota_id" source-type="string" target="quota_id" target-type="string" target-header="Azure Subscription" not-null="true"/>
             <field resource="spending_limit" source-type="string" target="spending_limit" target-type="string" target-header="Azure Subscription" not-null="true"/>
          </mapping>
-        </task>
+       </task>
+
+       <!-- GCP Security Group, AKA GCP Firewall Rules -->
+        <task enable="false" name="D42 GCP Firewall Rules to Freshservice GCP Security Group" type="GCP Security Group" description="Copy GCP Firewall Rules from Device42 to FreshService" d42_min_version="19.04.00">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,  
+              resource.identifier                                                        AS item_id,     
+              'global'                                                                   AS region,
+              resource.details ->> 'description'                                         AS description,
+              resource.details ->> 'network'                                             AS network,
+              (resource.details ->> 'disabled')::boolean                                 AS disabled,
+              resource.details ->> 'priority'                                            AS priority,
+              resource.details ->> 'direction'                                           AS direction,
+              resource.details ->> 'self_link'                                           AS self_link,
+              resource.details ->> 'target_tags'                                         AS target_tags,
+              resource.details ->> 'source_ranges'                                       AS source_ranges,
+              resource.details ->> 'destination_ranges'                                  AS destination_ranges,
+              (resource.details ->> 'created_timestamp')::timestamptz                    AS created_timestamp,
+              resource.details ->> 'inbound_rules_count'                                 AS inbound_rules_count,
+              resource.details ->> 'outbound_rules_count'                                AS outbound_rules_count,
+              resource.details ->> 'log_config_enabled'                                  AS log_config_enabled,
+              resource.details ->> 'allowed_ip_protocols'                                AS allowed_ip_protocols,
+              resource.details ->> 'denied_ip_protocols'                                 AS denied_ip_protocols,
+              'GCP'                                                                      AS provider,
+              'GCP Security Group'                                                       AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            WHERE resource.category @> ARRAY['gcp_firewall_rule']
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <!-- GCP Security Group -->
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Security Group" not-null="true" error-skip="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Security Group" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="inbound_rules_count" source-type="integer" target="inbound_rules_count" target-type="integer" target-header="Security Group" skip-if-null="true"/>
+            <field resource="outbound_rules_count" source-type="integer" target="outbound_rules_count" target-type="integer" target-header="Security Group" skip-if-null="true"/>
+            <field resource="created_timestamp" source-type="date" target="creation_timestamp" target-type="date" target-header="GCP Security Group" not-null="true" set-space="true" min-length="1" max-length="255"/>
+            <field resource="priority" source-type="string" target="priority" target-type="integer" target-header="GCP Security Group" not-null="true"/>
+            <field resource="direction" source-type="string" target="direction" target-type="string" target-header="GCP Security Group" not-null="true"/>
+            <field resource="disabled" source-type="boolean" target="disabled" target-type="boolean" target-header="GCP Security Group"/>
+            <field resource="self_link" source-type="string" target="self_link" target-type="string" target-header="GCP Security Group" not-null="true"/>
+            <field resource="description" source-type="string" target="description" target-header="GCP Security Group" not-null="true"/>
+            <field resource="source_ranges" source-type="string" target="source_ranges" target-header="GCP Security Group" not-null="true"/>
+            <field resource="destination_ranges" source-type="string" target="destination_ranges" target-header="GCP Security Group" not-null="true"/>
+            <field resource="allowed_ip_protocols" source-type="string" target="allowed_ip_protocols" target-header="GCP Security Group" not-null="true"/>
+            <field resource="denied_ip_protocols" source-type="string" target="denied_ip_protocols" target-header="GCP Security Group" not-null="true"/>
+            <field resource="log_config_enabled" source-type="string" target="log_config_enabled" target-type="string" target-header="GCP Security Group" not-null="true"/>
+         </mapping>
+       </task>
+
+       <!-- AWS Image -->
+        <task enable="true" name="D42 AWS Image to Freshservice AWS Image" type="AWS Image" description="Copy AWS Image from Device42 to FreshService" d42_min_version="19.04.00">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,  
+              resource.identifier                                                        AS item_id,     
+              resource.region                                                            AS region,
+              resource.details ->> 'description'                                         AS description,
+              resource.details ->> 'image_location'                                      AS image_source,
+              resource.details ->> 'guest_os'                                            AS guest_os,
+              (resource.details ->> 'creation_date')::timestamptz                        AS created_time,
+              resource.details ->> 'image_type'                                          AS image_type,
+              resource.details ->> 'state'                                               AS state,
+              resource.details ->> 'hypervisor'                                          AS hypervisor,
+              resource.details ->> 'root_device_name'                                    AS root_device_name,
+              resource.details ->> 'root_device_type'                                    AS root_device_type,
+              resource.details ->> 'virtualization_type'                                 AS virtualization_type,
+              resource.details ->> 'is_public'                                           AS is_public,
+              'AWS'                                                                      AS provider,
+              'AWS Image'                                                                AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            WHERE resource.category @> ARRAY['AWS Image']
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <!-- AWS Image -->
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="description" source-type="string" target="description" target-header="General" not-null="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Image" not-null="true" error-skip="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Image" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="image_source" source-type="string" target="image_source" target-type="string" target-header="Image" skip-if-null="true"/>
+            <field resource="guest_os" source-type="string" target="guest_os" target-type="dropdown" target-header="Image" skip-if-null="true"/>
+            <field resource="created_time" source-type="string" target="created_time" target-type="date" target-header="AWS Image" skip-if-null="true"/>
+            <field resource="image_type" source-type="string" target="image_type" target-type="dropdown" target-header="AWS Image" skip-if-null="true"/>
+            <field resource="state" source-type="string" target="state" target-type="dropdown" target-header="AWS Image" skip-if-null="true"/>
+            <field resource="hypervisor" source-type="string" target="hypervisor" target-type="string" target-header="AWS Image" skip-if-null="true"/>
+            <!-- There is a known issue reported to FS, the following field types are swapped -->
+            <field resource="root_device_name" source-type="string" target="root_device_name" target-type="dropdown" target-header="AWS Image" skip-if-null="true"/>
+            <field resource="root_device_type" source-type="string" target="root_device_type" target-type="string" target-header="AWS Image" skip-if-null="true"/>
+            <!-- -->
+            <field resource="virtualization_type" source-type="string" target="virtualization_type" target-type="dropdown" target-header="AWS Image" skip-if-null="true"/>
+            <field resource="is_public" source-type="string" target="public" target-type="boolean" target-header="AWS Image" skip-if-null="true"/>
+         </mapping>
+       </task>
+
+       <!-- GCP Image -->
+        <task enable="true" name="D42 GCP Image to Freshservice AWS Image" type="GCP Image" description="Copy GCP Image from Device42 to FreshService" d42_min_version="19.04.00">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,  
+              resource.identifier                                                        AS item_id,
+              resource.details ->> 'description'                                         AS description,  
+              resource.details ->> 'kind'                                                AS kind,     
+              resource.details ->> 'status'                                              AS status,     
+              resource.details ->> 'self_link'                                           AS self_link,
+              resource.details ->> 'source_id'                                           AS source_id,
+              resource.details ->> 'image_source'                                        AS image_source,
+              resource.details ->> 'disk_size_gb'                                        AS disk_size_gb,  
+              resource.details ->> 'storage_location'                                    AS storage_location,  
+              (resource.details ->> 'creation_timestamp')::timestamptz                   AS creation_timestamp,  
+              'global'                                                                   AS region,
+              'GCP'                                                                      AS provider,
+              'GCP Image'                                                                AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            WHERE resource.category @> ARRAY['GCP Image']
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <!-- GCP Image -->
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Image" not-null="true" error-skip="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Image" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="image_source" source-type="string" target="image_source" target-type="string" target-header="Image" skip-if-null="true"/>
+            <field resource="creation_timestamp" source-type="string" target="creation_timestamp" target-type="date" target-header="GCP Image" skip-if-null="true"/>
+            <field resource="status" source-type="string" target="status" target-type="dropdown" target-header="GCP Image" skip-if-null="true"/>
+            <field resource="self_link" source-type="string" target="self_link" target-type="string" target-header="GCP Image" skip-if-null="true"/>
+            <field resource="source_id" source-type="string" target="source_id" target-type="string" target-header="GCP Image" skip-if-null="true"/>
+            <field resource="kind" source-type="string" target="kind" target-type="string" target-header="GCP Image" skip-if-null="true"/>
+            <field resource="disk_size_gb" source-type="string" target="disk_size" target-type="integer" target-header="GCP Image" skip-if-null="true"/>
+            <field resource="storage_location" source-type="string" target="storage_location" target-type="string" target-header="GCP Image" skip-if-null="true"/>
+         </mapping>
+       </task>
     </tasks>
 </meta>

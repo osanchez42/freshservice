@@ -327,7 +327,7 @@ def update_objects_from_server(sources, _target, mapping):
                                 target_type = map_info["@target-type"]
                                 if target_type == "integer" or target_type == "float":
                                     value = 0
-                                elif target_type == "date":
+                                elif target_type in ["date", "datetime"]:
                                     value = None
                                     is_valid = False
                                 elif target_type == "boolean":
@@ -991,7 +991,7 @@ def update_contracts_from_server(sources, _target, mapping):
                             target_type = map_info["@target-type"]
                             if target_type == "integer" or target_type == "float":
                                 value = 0
-                            elif target_type == "date":
+                            elif target_type in ["date", "datetime"]:
                                 value = None
                                 is_valid = False
                             elif target_type == "boolean":

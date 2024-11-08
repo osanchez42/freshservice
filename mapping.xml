@@ -21,7 +21,7 @@
             </mapping>
         </task>
 
-        <task enable="true" name="Devices" description="Copy Servers from Device42 to FreshService using DOQL v2" d42_min_version="19.03.00">
+        <task enable="false" name="Devices" description="Copy Servers from Device42 to FreshService using DOQL v2" d42_min_version="19.03.00">
             <api>
                 <target model="products" target="freshservice" method="POST" update_method="PUT" path="api/v2/products"/>
                 <resource target="device42" method="POST" path="services/data/v1.0/query/"
@@ -668,17 +668,17 @@
             <resource model="cloudinfrastructure" target="device42" method="POST" path="services/data/v1.0/query/"
             doql="
             SELECT
-              infra.details ->> 'display_name'                                        AS name,
-              infra.account_id                                                        AS item_id,
-              infra.organization                                                      AS tenant,
-              infra.details ->> 'state'                                               AS subscription_state,
-              infra.details ->> 'authorization_source'                                AS authorization_source,
-              infra.details ->> 'location_placement_id'                               AS location_placement_id,
-              infra.details ->> 'quota_id'                                            AS quota_id,
-              infra.details ->> 'spending_limit'                                      AS spending_limit,
-              'AZURE'                                                                 AS provider,
-              'Azure Subscription'                                                    AS asset_type,
-              format('CloudInfrastructure-%s', infra.cloudinfrastructure_pk)          AS device42_id
+              COALESCE(infra.details ->> 'display_name', infra.cloudinfrastructure_name, infra.account_id)      AS name,
+              infra.account_id                                                                                  AS item_id,
+              infra.organization                                                                                AS tenant,
+              infra.details ->> 'state'                                                                         AS subscription_state,
+              infra.details ->> 'authorization_source'                                                          AS authorization_source,
+              infra.details ->> 'location_placement_id'                                                         AS location_placement_id,
+              infra.details ->> 'quota_id'                                                                      AS quota_id,
+              infra.details ->> 'spending_limit'                                                                AS spending_limit,
+              'AZURE'                                                                                           AS provider,
+              'Azure Subscription'                                                                              AS asset_type,
+              format('CloudInfrastructure-%s', infra.cloudinfrastructure_pk)                                    AS device42_id
             FROM
               view_cloudinfrastructure_v2 infra
             LEFT JOIN
@@ -768,7 +768,7 @@
        </task>
 
        <!-- AWS Image -->
-        <task enable="true" name="D42 AWS Image to Freshservice AWS Image" type="AWS Image" description="Copy AWS Image from Device42 to FreshService" d42_min_version="19.04.00">
+        <task enable="false" name="D42 AWS Image to Freshservice AWS Image" type="AWS Image" description="Copy AWS Image from Device42 to FreshService" d42_min_version="19.04.00">
           <api>
             <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
             <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
@@ -824,7 +824,7 @@
        </task>
 
        <!-- GCP Image -->
-        <task enable="true" name="D42 GCP Image to Freshservice AWS Image" type="GCP Image" description="Copy GCP Image from Device42 to FreshService" d42_min_version="19.04.00">
+        <task enable="false" name="D42 GCP Image to Freshservice AWS Image" type="GCP Image" description="Copy GCP Image from Device42 to FreshService" d42_min_version="19.04.00">
           <api>
             <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
             <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
@@ -869,6 +869,189 @@
             <field resource="kind" source-type="string" target="kind" target-type="string" target-header="GCP Image" skip-if-null="true"/>
             <field resource="disk_size_gb" source-type="string" target="disk_size" target-type="integer" target-header="GCP Image" skip-if-null="true"/>
             <field resource="storage_location" source-type="string" target="storage_location" target-type="string" target-header="GCP Image" skip-if-null="true"/>
+         </mapping>
+       </task>
+
+       <!-- Azure Resource Groups -->
+        <task enable="false" name="D42 Azure Resource Group to Freshservice Resource Group" type="Azure Resource Group" description="Copy Azure Resource Group from Device42 to FreshService" d42_min_version="19.04.00">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" path="api/v2/assets" asset-type="assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,  
+              resource.identifier                                                        AS item_id,
+              resource.details ->> 'resource_type'                                       AS resource_type,   
+              resource.details ->> 'provisioning_state'                                  AS provisioning_state,   
+              resource.details ->> 'region_name'                                         AS region,
+              'AZURE'                                                                    AS provider,
+              'Azure Resource Group'                                                     AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            WHERE resource.category @> ARRAY['resource_group', 'Azure']
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" name="name" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <!-- Azure Resource Groups -->
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Resource Group" not-null="true" error-skip="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Resource Group" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="resource_type" source-type="string" target="resource_type" target-type="string" target-header="Azure Resource Group" skip-if-null="true"/>
+            <field resource="provisioning_state" source-type="string" target="provisioning_state" target-type="string" target-header="Azure Resource Group" skip-if-null="true"/>
+         </mapping>
+       </task>
+
+       <!-- Azure Key Vault -->
+        <task enable="false" name="D42 Azure Key Vault to Freshservice Azure Key Vault" type="GCP Image" description="Copy Azure Key Vault from Device42 to FreshService" d42_min_version="19.04.00">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" asset-type="assets" path="api/v2/assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,
+              CONCAT(resource.details ->> 'subscription_id', '/', resource.details ->> 'resource_group', '/', resource.resource_name) AS item_id,
+              resource.details ->> 'resource_type'                                       AS resource_type,
+              resource.region                                                            AS region,
+              'AZURE'                                                                    AS provider,
+              'Azure Key Vault'                                                          AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            WHERE resource.category @> ARRAY['azure_key_vault']
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <!-- Azure Key Vault -->
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Key Vault" not-null="true" error-skip="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="Key Vault" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="resource_type" source-type="string" target="resource_type" target-type="string" target-header="Azure Key Vault" skip-if-null="true"/>
+         </mapping>
+       </task>
+
+       <!-- AWS K8 Pod -->
+        <task enable="false" name="D42 AWS K8 Pod to Freshservice AWS K8 Pod" type="asset" description="Copy AWS K8 Pod from Device42 to FreshService" d42_min_version="19.04.10">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" asset-type="assets" path="api/v2/assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              resource.resource_name                                                     AS name,
+              resource.identifier                                                        AS item_id,
+              cluster.resource_name                                                      AS cluster_name,
+              cluster.details ->> 'endpoint'                                             AS cluster_url,
+              (resource.details ->> 'create_time')::timestamptz                          AS creation_timestamp,
+              resource.details ->> 'namespace'                                           AS namespace,
+              resource.details ->> 'resource_version'                                    AS resource_version,
+              resource.details ->> 'generate_name'                                       AS generate_name,
+              resource.details ->> 'status'                                              AS phase,
+              resource.region                                                            AS region,
+              'AWS'                                                                      AS provider,
+              'AWS K8s Pod'                                                              AS asset_type,
+              format('Resource-%s', resource.resource_pk)                                AS device42_id
+            FROM
+              view_resource_v2 resource
+            JOIN view_cloudinfrastructure_v2 infra ON resource.cloudinfrastructure_fk = infra.cloudinfrastructure_pk
+            JOIN view_vendor_v1 vendor ON infra.cloud_vendor_fk = vendor.vendor_pk
+            LEFT JOIN view_resource_v2 cluster ON resource.root_resource_fk = cluster.resource_pk
+            WHERE resource.category @> ARRAY['pod', 'Kubernetes'] AND vendor.name = 'Amazon'
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND resource.last_changed > '%s'">
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <!-- K8s Pod -->
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="K8s Pod" not-null="true" error-skip="true"/>
+            <field resource="name" source-type="string" target="item_name" target-type="string" target-header="K8s Pod" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="cluster_name" source-type="string" target="cluster_name" target-type="string" target-header="K8s Pod" skip-if-null="true"/>
+            <field resource="cluster_url" source-type="string" target="cluster_url" target-type="string" target-header="K8s Pod" skip-if-null="true"/>
+            <field resource="creation_timestamp" source-type="creation_timestamp" target="creation_timestamp" target-type="date" target-header="K8s Pod" skip-if-null="true"/>
+            <!-- AWS K8s Pod -->
+            <field resource="namespace" source-type="string" target="namespace" target-type="string" target-header="AWS K8s Pod" skip-if-null="true"/>
+            <field resource="resource_version" source-type="string" target="resource_version" target-type="string" target-header="AWS K8s Pod" skip-if-null="true"/>
+            <field resource="generate_name" source-type="string" target="generate_name" target-type="string" target-header="AWS K8s Pod" skip-if-null="true"/>
+            <field resource="phase" source-type="string" target="phase" target-type="string" target-header="AWS K8s Pod" skip-if-null="true"/>
+         </mapping>
+       </task>
+
+       <!-- AWS Public IP -->
+       <task enable="true" name="D42 AWS Public IP to Freshservice AWS Public IP" type="asset" description="Copy AWS Public IP from Device42 to FreshService" d42_min_version="19.04.10">
+          <api>
+            <target model="assets" target="freshservice" method="POST" update_method="PUT" asset-type="assets" path="api/v2/assets"/>
+            <resource model="Resources" target="device42" method="POST" path="services/data/v1.0/query/"
+            doql="
+            SELECT
+              COALESCE(NULLIF(ip.label, ''), host(ip.ip_address))                        AS name,
+              NULLIF(ip.label, '')                                                       AS ip_name,
+              ip.ip_address                                                              AS item_id,
+              ip.ip_address                                                              AS public_ip,
+              CASE 
+                  WHEN NULLIF(ip.details ->> 'instance_id', '') IS NOT NULL THEN 'Attached'
+                  ELSE 'Unattached'
+              END AS state,
+              ip.details ->> 'domain'                                                    AS domain,
+              ip.details ->> 'allocation_id'                                             AS allocation_id,
+              ip.details ->> 'association_id'                                            AS association_id,
+              ip.details ->> 'instance_id'                                               AS instance_id,
+              ip.details ->> 'public_ipv4_pool'                                          AS public_ipv4_pool,
+              ip.details ->> 'private_ip_address'                                        AS private_ip,
+              ip.details ->> 'network_border_group'                                      AS network_border_group,
+              ip.details ->> 'network_interface_id'                                      AS network_interface_id,
+              ip.details ->> 'network_interface_owner_id'                                AS network_interface_owner_id,
+              ip.details ->> 'public_dns'                                                AS public_dns,
+              ip.details ->> 'region'                                                    AS region,
+              infra.account_id                                                           AS account_id,
+              'AWS'                                                                      AS provider,
+              'AWS Public IP Address'                                                    AS asset_type,
+              format('ip-%s', ip.ipaddress_pk)                                           AS device42_id
+            FROM
+              view_ipaddress_v2 ip
+            JOIN view_cloudinfrastructure_v2 infra ON ip.cloudinfrastructure_fk = infra.cloudinfrastructure_pk
+            JOIN view_vendor_v1 vendor ON infra.cloud_vendor_fk = vendor.vendor_pk
+            WHERE ip.cloudinfrastructure_fk is not null AND ip.is_public = True AND vendor.name = 'Amazon'
+            "
+            />
+          </api>
+          <matching>
+              <source-1 device42-id="device42_id" item-id="item_id"/>
+          </matching>
+          <mapping callback="from_d42" key="name" doql-suffix=" AND ip.last_changed > '%s'">
+            <field resource="name" source-type="string" target="name" target-type="string" target-header="General" set-space="true" min-length="1" max-length="248" escape="true"/>
+            <field resource="provider" source-type="string" target="provider_type" target-type="string" target-header="Cloud" not-null="true"/>
+            <field resource="region" source-type="string" target="region" target-type="dropdown" target-header="Cloud" not-null="true"/>
+            <!-- Public IP Address -->
+            <field resource="item_id" source-type="string" target="item_id" target-type="string" target-header="Public IP Address" not-null="true" error-skip="true"/>
+            <field resource="ip_name" source-type="string" target="item_name" target-type="string" target-header="Public IP Address" not-null="true"/>
+            <field resource="public_ip" source-type="string" target="public_ip" target-type="string" target-header="Public IP Address" not-null="true"/>
+            <field resource="public_dns" source-type="string" target="public_dns" target-type="string" target-header="Public IP Address" not-null="true"/>
+            <field resource="state" source-type="string" target="state" target-type="dropdown" target-header="Public IP Address" not-null="true"/>
+            <!-- AWS Public IP Address -->
+            <field resource="instance_id" source-type="string" target="instance_id" target-type="string" target-header="AWS Public IP Address" skip-if-null="true"/>
+            <field resource="allocation_id" source-type="string" target="allocation_id" target-type="string" target-header="AWS Public IP Address" skip-if-null="true"/>
+            <field resource="domain" source-type="string" target="cd_domain" target-type="string" target-header="AWS Public IP Address" skip-if-null="true"/>
+            <field resource="network_interface_id" source-type="string" target="nic_id" target-type="string" target-header="AWS Public IP Address" skip-if-null="true"/>
+            <field resource="network_interface_owner_id" source-type="string" target="owner_id" target-type="string" target-header="AWS Public IP Address" skip-if-null="true"/>
+            <field resource="public_ipv4_pool" source-type="string" target="public_ipv4_pool" target-type="string" target-header="AWS Public IP Address" skip-if-null="true"/>
+            <field resource="account_id" source-type="string" target="account_id" target-type="integer" target-header="AWS Public IP Address" skip-if-null="true"/>
+            <field resource="private_ip" source-type="string" target="private_ip" target-type="string" target-header="AWS Public IP Address" skip-if-null="true"/>
          </mapping>
        </task>
     </tasks>

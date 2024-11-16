@@ -1,0 +1,156 @@
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="meta" type="metaType"/>
+  <xs:complexType name="targetType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="asset-type" use="optional"/>
+        <xs:attribute type="xs:boolean" name="delete" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+  <xs:complexType name="resourceType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="doql"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+  <xs:complexType name="apiType">
+    <xs:sequence>
+      <xs:element type="targetType" name="target"/>
+      <xs:element type="resourceType" name="resource"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="source1Type">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="device42-id" use="optional"/>
+        <xs:attribute type="xs:string" name="name" use="optional"/>
+        <xs:attribute type="xs:string" name="serial-number" use="optional"/>
+        <xs:attribute type="xs:string" name="uuid" use="optional"/>
+        <xs:attribute type="xs:string" name="item-id" use="optional"/>
+        <xs:attribute type="xs:string" name="mac-address" use="optional"/>
+        <xs:attribute type="xs:string" name="imei-number" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+  <xs:complexType name="source2Type">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="device42-id" use="optional"/>
+        <xs:attribute type="xs:string" name="name" use="optional"/>
+        <xs:attribute type="xs:string" name="serial-number" use="optional"/>
+        <xs:attribute type="xs:string" name="uuid" use="optional"/>
+        <xs:attribute type="xs:string" name="item-id" use="optional"/>
+        <xs:attribute type="xs:string" name="mac-address" use="optional"/>
+        <xs:attribute type="xs:string" name="imei-number" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+  <xs:complexType name="matchingType">
+    <xs:sequence>
+      <xs:element type="source1Type" name="source-1"/>
+      <xs:element type="source2Type" name="source-2" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="fieldType" mixed="true">
+    <xs:sequence>
+      <xs:element type="value-mappingType" name="value-mapping" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute type="xs:string" name="resource"/>
+    <xs:attribute type="xs:string" name="source-type" use="optional"/>
+    <xs:attribute type="xs:string" name="target"/>
+    <xs:attribute type="xs:string" name="target-type" use="optional"/>
+    <xs:attribute type="xs:int" name="max-length" use="optional"/>
+    <xs:attribute type="xs:boolean" name="escape" use="optional"/>
+    <xs:attribute type="xs:boolean" name="not-null" use="optional"/>
+    <xs:attribute type="xs:boolean" name="set-space" use="optional"/>
+    <xs:attribute type="xs:int" name="min-length" use="optional"/>
+    <xs:attribute type="xs:string" name="target-header" use="optional"/>
+    <xs:attribute type="xs:string" name="target-foreign" use="optional"/>
+    <xs:attribute type="xs:string" name="target-foreign-key" use="optional"/>
+    <xs:attribute type="xs:boolean" name="required" use="optional"/>
+    <xs:attribute type="xs:boolean" name="error-skip" use="optional"/>
+    <xs:attribute type="xs:string" name="type" use="optional"/>
+    <xs:attribute type="xs:boolean" name="set-zero" use="optional"/>
+    <xs:attribute type="xs:string" name="display-name" use="optional"/>
+    <xs:attribute type="xs:string" name="target-field" use="optional"/>
+    <xs:attribute type="xs:boolean" name="not-zero" use="optional"/>
+    <xs:attribute type="xs:string" name="target-sub-key" use="optional"/>
+    <xs:attribute type="xs:boolean" name="skip-update" use="optional"/>
+    <xs:attribute type="xs:boolean" name="skip-if-null" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="mappingType" mixed="true">
+    <xs:sequence>
+      <xs:element type="fieldType" name="field" maxOccurs="unbounded" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute type="xs:string" name="key" use="optional"/>
+    <xs:attribute type="xs:string" name="doql-suffix" use="optional"/>
+    <xs:attribute type="xs:string" name="source" use="optional"/>
+    <xs:attribute type="xs:string" name="device-name" use="optional"/>
+    <xs:attribute type="xs:string" name="software-name" use="optional"/>
+    <xs:attribute type="xs:string" name="install-date" use="optional"/>
+    <xs:attribute type="xs:string" name="version" use="optional"/>
+    <xs:attribute type="xs:string" name="downstream-relationship" use="optional"/>
+    <xs:attribute type="xs:string" name="upstream-relationship" use="optional"/>
+    <xs:attribute type="xs:string" name="target-key" use="optional"/>
+    <xs:attribute type="xs:string" name="contract-name" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="taskType">
+    <xs:sequence>
+      <xs:element type="apiType" name="api"/>
+      <xs:element type="matchingType" name="matching" minOccurs="0"/>
+      <xs:element type="mappingType" name="mapping"/>
+      <xs:element type="unmappingType" name="unmapping" minOccurs="0"/>
+      <xs:element type="d42urlType" name="d42url" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute type="xs:string" name="enable" use="optional"/>
+    <xs:attribute type="xs:string" name="name" use="optional"/>
+    <xs:attribute type="xs:string" name="type" use="optional"/>
+    <xs:attribute type="xs:string" name="description" use="optional"/>
+    <xs:attribute type="xs:string" name="d42_min_version" use="optional"/>
+    <xs:attribute type="xs:string" name="d42_max_version" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="itemType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="key" use="optional"/>
+        <xs:attribute type="xs:string" name="value" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+  <xs:complexType name="value-mappingType">
+    <xs:sequence>
+      <xs:element type="itemType" name="item" maxOccurs="unbounded" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute type="xs:string" name="default" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="unmappingType" mixed="true">
+    <xs:sequence>
+      <xs:element type="fieldType" name="field" maxOccurs="unbounded" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute type="xs:string" name="key" use="optional"/>
+    <xs:attribute type="xs:string" name="source" use="optional"/>
+    <xs:attribute type="xs:string" name="doql-suffix" use="optional"/>
+  </xs:complexType>
+  <xs:complexType name="d42urlType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute type="xs:string" name="resource" use="optional"/>
+        <xs:attribute type="xs:string" name="source-type" use="optional"/>
+        <xs:attribute type="xs:string" name="url" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+  <xs:complexType name="tasksType">
+    <xs:sequence>
+      <xs:element type="taskType" name="task" maxOccurs="unbounded" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="metaType">
+    <xs:sequence>
+      <xs:element type="tasksType" name="tasks"/>
+    </xs:sequence>
+    <xs:attribute type="xs:string" name="version" use="optional"/>
+  </xs:complexType>
+</xs:schema>

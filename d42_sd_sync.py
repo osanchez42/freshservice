@@ -13,6 +13,7 @@ from xmljson import badgerfish as bf
 import time
 import math
 import configparser
+from lxml import etree
 
 logger = logging.getLogger('log')
 logger.setLevel(logging.INFO)
@@ -38,6 +39,7 @@ parser = argparse.ArgumentParser(description="freshservice")
 parser.add_argument('-fsurl', '--freshserviceurl', action='store_true', help='Freshservice url')
 parser.add_argument('-fstoken', '--freshservicetoken', action='store_true', help='Freshservice API token')
 parser.add_argument('-fsuser', '--freshserviceusername', action='store_true', help='Freshservice user', default=None)
+parser.add_argument('-v', '--validate', action='store_true', help='validate mapping', default=False)
 
 parser.add_argument('-d42url', '--d42url', action='store_true', help='Device42 URL')
 parser.add_argument('-d42user', '--d42username', action='store_true', help='Device42 username')
@@ -232,7 +234,7 @@ def update_objects_from_server(sources, _target, mapping):
         logger.info("finished getting all existing assets in FS from cache.")
     else:
         logger.info("Getting all existing assets in FS.")
-        existing_objects_map = freshservice.get_objects_map(_target["@path"], _target["@model"])
+        existing_objects_map = freshservice.get_objects_map("api/v2/products", "assets")
         logger.info("finished getting all existing assets in FS.")
         fs_cache["assets"] = existing_objects_map
 
@@ -514,7 +516,7 @@ def update_products_from_server(sources, _target, mapping):
     global freshservice
 
     logger.info("Getting all existing products in FS.")
-    existing_objects_map = freshservice.get_objects_map(_target["@path"], _target["@model"])
+    existing_objects_map = freshservice.get_objects_map("api/v2/products", "assets")
     logger.info("finished getting all existing products in FS.")
 
     asset_types_map = freshservice.get_objects_map("api/v2/asset_types", "asset_types")
@@ -1148,7 +1150,7 @@ def task_execute(task, device42):
     _resource = task["api"]["resource"]
     _target = task["api"]["target"]
 
-    method = _resource['@method']
+    method = "POST"
     if "@doql" in _resource:
         doql = _resource['@doql']
     else:
@@ -1221,6 +1223,23 @@ def get_agent_from_freshservice(email):
 
     return default_approver
 
+def validate_xml(xml_file, xsd_file):
+    # Parse the XML and XSD files
+    with open(xsd_file, 'r') as xsd_f:
+        xsd_tree = etree.parse(xsd_f)
+        xsd_schema = etree.XMLSchema(xsd_tree)
+
+    with open(xml_file, 'r') as xml_f:
+        xml_tree = etree.parse(xml_f)
+
+    # Validate the XML file against the XSD schema
+    if xsd_schema.validate(xml_tree):
+        print("XML is valid against the provided XSD schema.")
+    else:
+        print("XML is not valid. Validation errors:")
+        for error in xsd_schema.error_log:
+            print(error)
+
 
 def main():
     global freshservice
@@ -1237,6 +1256,11 @@ def main():
 
     # read args from command line
     args = parser.parse_args()
+
+    if args.validate == True:
+        print("Validating mapping.xml")
+        validate_xml("mapping.xml", "mapping.xsd")
+        return
     if not all([args.freshserviceurl, args.freshservicetoken, args.freshserviceusername, 
             args.d42url, args.d42username, args.d42password]):
         print("Not all command line args were supplied, fallback to config.ini")

@@ -10,7 +10,10 @@
             "type": "debugpy",
             "request": "launch",
             "program": "d42_sd_sync.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "args": [
+                //"--validate"
+            ]
         }
     ]
 }

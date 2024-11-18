@@ -10,13 +10,42 @@ Python 3.5+
 
 The following Python Packages are required:
 
-* pycrypto==2.6.1
-* pyparsing==2.1.10
-* pyzmq==16.0.2
-* requests==2.13.0
-* xmljson==0.2.0
+* appdirs==1.4.4
+* beautifulsoup4==4.12.3
+* bs4==0.0.2
+* certifi==2024.8.30
+* cffi==1.17.1
+* charset-normalizer==3.3.2
+* colorama==0.4.6
+* cryptography==43.0.1
+* cssselect==1.2.0
+* fake-useragent==1.5.1
+* idna==3.10
+* importlib_metadata==8.5.0
+* lxml==5.3.0
+* parse==1.20.2
+* pycparser==2.22
+* pyee==11.1.1
+* PyJWT==2.9.0
+* pyppeteer==2.0.0
+* pyquery==2.0.1
+* pytz==2024.2
+* requests==2.32.3
+* requests-html==0.10.0
+* soupsieve==2.6
+* tqdm==4.66.5
+* typing_extensions==4.12.2
+* urllib3==1.26.20
+* w3lib==2.2.1
+* websockets==10.4
+* xmljson==0.2.1
+* zipp==3.20.2
 
 These can all be installed by running `pip install -r requirements.txt`.
+
+install chromium
+
+playwright install
 
 Once installed, the script itself is run by this command: `python d42_sd_sync.py`.
 
@@ -35,10 +64,10 @@ These can all be installed by running pip install -r requirements.txt.
 In order to run the legacy migration, you will also need to modify the mapping.xml file so that the legacy mapping options are used
 
 modify the following line so that `enable` is set to false for the v2_views
-```enable="false" description="Copy Servers from Device42 to FreshService using DOQL v2_views"```
+```enable="false" description="Copy Servers from Device42 to Freshservice using DOQL v2_views"```
 
 modify the following line so that `enable` is set to true for the v1_views
-```enable="true" description="Copy Servers from Device42 to FreshService using DOQL v1_views"```
+```enable="true" description="Copy Servers from Device42 to Freshservice using DOQL v1_views"```
 
 Once the packages are installed and the script is configured, the script can be run by this command: python d42_sd_sync.py.
 

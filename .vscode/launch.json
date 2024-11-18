@@ -9,7 +9,7 @@
             "name": "Device42 to Freshservice Sync",
             "type": "debugpy",
             "request": "launch",
-            "program": "d42_sd_sync.py",
+            "program": "main.py",
             "console": "integratedTerminal",
             "args": [
                 //"--validate"

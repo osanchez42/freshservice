@@ -24,13 +24,12 @@ class Device42WrongRequest(Device42HTTPError):
 
 
 class Device42(object):
-    def __init__(self, endpoint, user, password, **kwargs):
-        self.base = endpoint
+    def __init__(self, url, user, password, logger):
+        self.base = url
         self.user = user
         self.pwd = password
         self.verify_cert = False
-        self.debug = kwargs.get('debug', False)
-        self.logger = kwargs.get('logger', None)
+        self.logger = logger
         self.base_url = "%s" % self.base
         self.headers = {}
 
@@ -73,6 +72,11 @@ class Device42(object):
     def get_device_by_name(self, name):
         path = "api/1.0/devices/name/%s" % name
         return self._get(path)
+    
+    def get_version(self):
+        path = "internal/ajax/get_d42_version/"
+        resp = self._get(path)
+        return resp.get('msg', None)
 
     def get_all_devices(self):
         path = "api/1.0/devices/all/"
@@ -88,8 +92,8 @@ class Device42(object):
 
         return devices
 
-    def doql(self, url, method, query=None):
-        path = url
+    def doql(self, query=None):
+        path = "services/data/v1.0/query/"
         if query is None:
             query = "SELECT * FROM view_device_v1 order by device_pk"
 

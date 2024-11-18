@@ -1,69 +1,44 @@
-# -*- coding: utf-8 -*-
-
-
+import re
 import requests
 from datetime import datetime
 import time
-import logging
-import jwt
-import pytz
+from urllib.parse import quote
+from Constants import *
 
-requests.packages.urllib3.disable_warnings()
-
-# in seconds
-DEFAULT_RETRY_AFTER = 10
-RETRY_AFTER_HEADER = 'Retry-After'
-
-
-class FreshServiceBaseException(Exception):
+class FreshserviceBaseException(Exception):
     pass
 
 
-class FreshServiceHTTPError(FreshServiceBaseException):
+class FreshserviceHTTPError(FreshserviceBaseException):
     pass
 
 
-class FreshServiceDuplicateValueError(FreshServiceHTTPError):
+class FreshserviceDuplicateValueError(FreshserviceHTTPError):
     pass
 
 
-class FreshService(object):
+class Freshservice(object):
     CITypeServerName = "Server"
     PAGE_SIZE = 100
-    FS_INTEGRATION_NAME_HEADER = 'FS-INTEGRATION-NAME'
-    JWT_ALGORITHM = 'HS256'
-    JWT_RECREATE_TIME = 15
+    JWT_VALID_FOR_SECONDS = 600
+    JWT_RECREATE_WHEN_SECONDS_LEFT = 30
+    ASSET_MATCH_FIELDS = ["device42_id", "name", "serial_number", "uuid", "item_id", "imei_number"]
 
-    def __init__(self, endpoint, api_key, logger, **kwargs):
-        self.base = endpoint
-        self.api_key = api_key
-        self.verify_cert = False
-        self.debug = kwargs.get('debug', False)
+    def __init__(self, url, api_key, freshservice_default_approver, logger):
+        self.base = url
+        self.api_token = api_key
         self.logger = logger
-        self.base_url = "https://%s" % self.base
+        self.default_apporver_id = freshservice_default_approver
+        self.base_url = self.base
         self.headers = {}
         self.last_time_call_api = None
         self.period_call_api = 1
         self.api_call_count = 0
         self.asset_types = None
-        self.created_by_jwt = None
-        self.expired_time_jwt = None
-
-    def _get_created_by_jwt(self):
-        if self.created_by_jwt is not None:
-            if self.expired_time_jwt - int(time.time()) > self.JWT_RECREATE_TIME:
-                return self.created_by_jwt
-
-        timestamp = int(round(time.time() + 120))
-        encoded = jwt.encode(
-            {'iss': 'device_42', 'exp': timestamp},
-            self.api_key,
-            self.JWT_ALGORITHM
-        )
-
-        self.created_by_jwt = encoded
-        self.expired_time_jwt = timestamp
-        return encoded
+        self.serial_number_field_regex = re.compile('^serial_number_[0-9]+$')
+        self.uuid_field_regex = re.compile('^uuid_[0-9]+$')
+        self.item_id_field_regex = re.compile('^item_id_[0-9]+$')
+        self.imei_number_field_regex = re.compile('^imei_number_[0-9]+$')
 
     def _send(self, method, path, data=None, headers=None):
         """ General method to send requests """
@@ -88,15 +63,16 @@ class FreshService(object):
         if headers:
             all_headers.update(headers)
 
+        retries = 0
+        max_retries = 3
+        retry_delay = 2  # second
+
+
         while True:
             if method == 'GET':
-                resp = requests.request(method, url, data=data, params=params,
-                                        auth=(self.api_key, "X"),
-                                        verify=self.verify_cert, headers=all_headers)
+                resp = requests.request(method, url, auth=(self.api_token, "X"), data=data, params=params, headers=all_headers)
             else:
-                resp = requests.request(method, url, json=data, params=params,
-                                        auth=(self.api_key, "X"),
-                                        verify=self.verify_cert, headers=all_headers)
+                resp = requests.request(method, url, auth=(self.api_token, "X"), json=data, params=params, headers=all_headers)
 
             self.last_time_call_api = datetime.now()
 
@@ -111,7 +87,6 @@ class FreshService(object):
                         try:
                             retry_after = int(header_value)
                         except ValueError as e:
-                            client.captureException(extra={'header_value': header_value})
                             self._log('Failed to convert Retry-After value of "%s" to int: %s' % (header_value, str(e)))
 
                     self._log("Throttling %d second(s)..." % retry_after)
@@ -124,9 +99,10 @@ class FreshService(object):
                         error_resp = resp.json()
                         if error_resp["description"] == "Validation failed":
                             for error in error_resp["errors"]:
-                                if (error["field"] == "serial_number" or error["field"] == "item_id") and \
-                                        (error["message"] == " must be unique" or error["message"] == " is not unique"):
-                                    exception = FreshServiceDuplicateValueError("HTTP %s (%s) Error %s: %s\n request was %s" %
+                                if ((error["field"] == "serial_number" or error["field"] == "item_id") and \
+                                        (error["message"] == " must be unique" or error["message"] == " is not unique")) or \
+                                        (error["field"] == "base" and error["message"] and error["message"].lower() == "asset already exists"):
+                                    exception = FreshserviceDuplicateValueError("HTTP %s (%s) Error %s: %s\n request was %s" %
                                                                 (method, path, resp.status_code, resp.text, data))
                                     break
                     except Exception:
@@ -134,8 +110,21 @@ class FreshService(object):
 
                     if exception is not None:
                         raise exception
+                elif resp.status_code >= 500:
+                    # Retry the request if we got back a 5xx status code in case the error is temporary
+                    # like a network issue.
+                    if retries < max_retries:
+                        retries += 1
+                        self._log("Retrying in %d seconds..." % retry_delay)
+                        # This is an exponential delay:
+                        # retry 1 delay is 2 seconds
+                        # retry 2 delay is 4 seconds
+                        # retry 3 delay is 8 seconds
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
 
-                raise FreshServiceHTTPError("HTTP %s (%s) Error %s: %s\n request was %s" %
+                raise FreshserviceHTTPError("HTTP %s (%s) Error %s: %s\n request was %s" %
                                             (method, path, resp.status_code, resp.text, data))
 
             if method == "DELETE":
@@ -155,6 +144,11 @@ class FreshService(object):
             path += '/'
         return self._send("POST", path, data=data, headers=headers)
 
+    def _patch(self, path, data, headers=None):
+        if not path.endswith('/'):
+            path += '/'
+        return self._send("PATCH", path, data=data, headers=headers)
+
     def _put(self, path, data, headers=None):
         if not path.endswith('/'):
             path += '/'
@@ -163,76 +157,93 @@ class FreshService(object):
     def _delete(self, path, data=None):
         return self._send("DELETE", path, data)
 
-    def _log(self, message, level=logging.DEBUG):
+    def _log(self, message):
         if self.logger:
-            self.logger.log(level, message)
-
-    def _get_asset_headers(self):
-        return {self.FS_INTEGRATION_NAME_HEADER: self._get_created_by_jwt()}
+            self.logger.debug(message)
 
     def insert_asset(self, data):
-        path = "api/v2/assets"
-        result = self._post(path, data, self._get_asset_headers())
+        path = "api/channel/device42/assets"
+        result = self._post(path, data)
         return self.create_basic_object(result["asset"])
 
     def update_asset(self, data, display_id):
-        path = "api/v2/assets/%d" % display_id
-        result = self._put(path, data, self._get_asset_headers())
-        return result["asset"]["id"]
+        path = "api/channel/device42/assets/%d" % display_id
+        result = self._put(path, data)
+        return self.create_basic_object(result["asset"])
 
     def delete_asset(self, display_id):
-        path = "api/v2/assets/%d/delete_forever" % display_id
-        result = self._put(path, {"No": 1})
+        path = "api/channel/device42/assets/%d" % display_id
+        result = self._delete(path)
         return result
 
+    def search_assets(self, search_field, search_value):
+        search = quote("%s:'%s'" % (search_field, search_value))
+        path = 'api/channel/device42/assets?include=type_fields&search="%s"' % search
+        result = self._get(path)
+        basic_objects = []
+        for asset in result['assets']:
+            basic_objects.append(self.create_basic_object(asset))
+
+        return basic_objects
+
     def get_assets_by_asset_type(self, asset_type_id):
-        path = "api/v2/assets?include=type_fields&query=\"asset_type_id:%d\"" % asset_type_id
+        path = "api/channel/device42/assets?include=type_fields&query=\"asset_type_id:%d\"" % asset_type_id
         assets = self._get(path)
         return assets["assets"]
 
+    def get_components_by_asset_id(self, asset_id):
+        path = "api/channel/device42/assets/%d/components" % asset_id
+        result = self._get(path)
+        return result["components"]
+
+    def insert_component(self, asset_id, data):
+        path = "api/channel/device42/assets/%d/components" % asset_id
+        result = self._post(path, data)
+        return result["component"]
+
+    def update_component(self, asset_id, component_id, data):
+        path = "api/channel/device42/assets/%d/components/%d" % (asset_id, component_id)
+        result = self._put(path, data)
+        return result["component"]
+
     def insert_software(self, data):
-        path = "api/v2/applications"
+        path = "api/channel/device42/applications"
         result = self._post(path, data)
         return self.create_basic_object(result["application"])
 
-    def update_software(self, data, id):
-        path = "api/v2/applications/%d" % id
-        result = self._put(path, data)
-        return result["application"]["id"]
-
     def delete_software(self, id):
-        path = "api/v2/applications/%d" % id
+        path = "api/channel/device42/applications/%d" % id
         result = self._delete(path)
         return result
 
     def insert_product(self, data):
-        path = "api/v2/products"
+        path = "api/channel/device42/products"
         result = self._post(path, data)
         return self.create_basic_object(result["product"])
 
     def update_product(self, data, id):
-        path = "api/v2/products/%d" % id
+        path = "api/channel/device42/products/%d" % id
         result = self._put(path, data)
         return result["product"]["id"]
 
     def insert_contract(self, data):
-        path = "api/v2/contracts"
+        path = "api/channel/device42/contracts"
         result = self._post(path, data)
         return self.create_basic_object(result["contract"])
 
     def update_contract(self, data, id):
-        path = "api/v2/contracts/%d" % id
+        path = "api/channel/device42/contracts/%d" % id
         result = self._put(path, data)
         return result["contract"]["id"]
 
     def get_associated_assets_by_contract(self, contract_id):
-        path = "/api/v2/contracts/%d/associated-assets" % contract_id
+        path = "api/channel/device42/contracts/%d/associated-assets" % contract_id
         return self.request(path, "GET", "associated_assets")
 
     def get_all_ci_types(self):
         if self.asset_types is not None:
             return self.asset_types
-        path = "api/v2/asset_types"
+        path = "api/channel/device42/asset_types"
         self.asset_types = self.request(path, "GET", "asset_types")
         return self.asset_types
 
@@ -264,8 +275,14 @@ class FreshService(object):
     def get_server_ci_type(self):
         return self.get_ci_type_by_name(self.CITypeServerName)
 
+    def get_windows_server_ci_type(self):
+        return self.get_ci_type_by_name(self.CITypeWindowsServerName)
+
+    def get_unix_server_ci_type(self):
+        return self.get_ci_type_by_name(self.CITypeUnixServerName)
+
     def get_asset_type_fields(self, asset_type_id):
-        path = "api/v2/asset_types/%d/fields" % asset_type_id
+        path = "api/channel/device42/asset_types/%d/fields" % asset_type_id
         return self._get(path)["asset_type_fields"]
 
     def get_all_server_assets(self):
@@ -278,43 +295,39 @@ class FreshService(object):
         return server_assets
 
     def get_products(self):
-        path = "/api/v2/products"
+        path = "api/channel/device42/products"
         products = self._get(path)
         return products["products"]
 
     def get_vendors(self):
-        path = "/api/v2/vendors"
+        path = "api/channel/device42/vendors"
         vendors = self._get(path)
         return vendors["vendors"]
 
-    def get_all_agents(self):
-        path = "/api/v2/agents"
-        return self.request(path, "GET", "agents")
-
     def get_agents(self, search, page, per_page):
-        path = "/api/v2/agents"
+        path = "api/channel/device42/agents"
         data = {'page': page, 'per_page': per_page}
         if search and len(search) >= 2:
             data['query'] = '"~[name|first_name|last_name|email]:\'' + search + '\'"'
         vendors = self._get(path, data)
         return vendors["agents"]
 
-    def get_id_by_name(self, model, name, foregin_key="name"):
-        path = "/api/v2/%s" % model
+    def get_id_by_name(self, model, name, foreign_key="name"):
+        path = "api/channel/device42/%s" % model
         models = self.request(path, "GET", model)
         for model in models:
-            if foregin_key in model and model[foregin_key] is not None and name is not None and \
-                            model[foregin_key].lower() == name.lower():
+            if foreign_key in model and model[foreign_key] is not None and name is not None and \
+                            model[foreign_key].lower() == name.lower():
                 return model["id"]
 
         return None
 
-    def insert_and_get_by_name(self, model, name, asset_type_id, foregin_key="name"):
-        path = "/api/v2/%s" % model
+    def insert_and_get_by_name(self, model, name, asset_type_id, foreign_key="name"):
+        path = "api/channel/device42/%s" % model
         if asset_type_id is not None:
-            data = {foregin_key: name, "asset_type_id": asset_type_id}
+            data = {foreign_key: name, "asset_type_id": asset_type_id}
         else:
-            data = {foregin_key: name}
+            data = {foreign_key: name}
         models = self._post(path, data)
         for key in models:
             return self.create_basic_object(models[key])
@@ -355,6 +368,9 @@ class FreshService(object):
         # be stored in the cache, so we want to try to minimize the memory footprint of it.
         obj = {"id": m["id"]}
 
+        if "device42_id" in m:
+            obj["device42_id"] = m["device42_id"]
+
         if "name" in m:
             obj["name"] = self.normalize_value(m["name"])
 
@@ -371,16 +387,104 @@ class FreshService(object):
         if "asset_type_id" in m:
             obj["asset_type_id"] = m["asset_type_id"]
 
+        if "parent_asset_type_id" in m:
+            obj["parent_asset_type_id"] = m["parent_asset_type_id"]
+
+        if "type_fields" in m:
+            found_serial_number_field = False
+            found_uuid_field = False
+            found_item_id_field = False
+            found_imei_number_field = False
+
+            for field in m["type_fields"]:
+                if found_serial_number_field and found_uuid_field and found_item_id_field and found_imei_number_field:
+                    break
+
+                if not found_serial_number_field:
+                    if self.serial_number_field_regex.match(field) is not None:
+                        obj["serial_number"] = m["type_fields"][field]
+                        found_serial_number_field = True
+
+                if not found_uuid_field:
+                    if self.uuid_field_regex.match(field) is not None:
+                        obj["uuid"] = m["type_fields"][field]
+                        found_uuid_field = True
+
+                if not found_item_id_field:
+                    if self.item_id_field_regex.match(field) is not None:
+                        obj["item_id"] = m["type_fields"][field]
+                        found_item_id_field = True
+
+                if not found_imei_number_field:
+                    if self.imei_number_field_regex.match(field) is not None:
+                        obj["imei_number"] = m["type_fields"][field]
+                        found_imei_number_field = True
+
         return obj
 
-    def get_objects_map(self, source_url, model, foregin_key="name"):
+    def get_assets_maps(self, source_url, model):
+        objects = self.request(source_url, "GET", model)
+
+        # We will have a map for each criterion that we want to find an asset by:
+        # 1) Device42 ID
+        # 2) name
+        # 3) serial number
+        # 4) UUID
+        # 5) item ID
+        # 6) imei number
+        assets_maps = dict()
+
+        # Create a map for each field we want to be able to search for an asset by.
+        # The name of the map will be same as the name of the field we want to search by.
+        # For example, if we want to find an asset with serial number "123", we will search
+        # the map named "serial_number".
+        for field in self.ASSET_MATCH_FIELDS:
+            assets_maps[field] = dict()
+
+        for obj in objects:
+            basic_obj = self.create_basic_object(obj)
+            self.add_asset_to_maps(basic_obj, assets_maps)
+
+        return assets_maps
+
+    def add_asset_to_maps(self, asset, assets_maps):
+        for field in self.ASSET_MATCH_FIELDS:
+            key = self._create_assets_map_key(asset, field)
+            if key:
+                assets_maps[field][key] = asset
+
+    def delete_asset_from_maps(self, asset, assets_maps):
+        for field in self.ASSET_MATCH_FIELDS:
+            key = self._create_assets_map_key(asset, field)
+            if key and key in assets_maps[field]:
+                del assets_maps[field][key]
+
+    def _create_assets_map_key(self, obj, field):
+        key = None
+
+        if field in obj:
+            key = self.create_assets_map_key_from_value(obj[field])
+
+        return key
+
+    def create_assets_map_key_from_value(self, val):
+        key = None
+
+        if val:
+            key = val.strip()
+            if key:
+                key = self.normalize_value(val).lower()
+
+        return key
+
+    def get_objects_map(self, source_url, model, foreign_key="name"):
         objects = self.request(source_url, "GET", model)
         # Return a dictionary where the key is the lowercase name of the object (usually, but could be any other property
         # of the object like the display id) and the value is the basic object (e.g. id, name, etc.).
-        return {self.normalize_value(obj[foregin_key]).lower() if isinstance(obj[foregin_key], str) else obj[foregin_key]: self.create_basic_object(obj) for obj in objects}
+        return {self.normalize_value(obj[foreign_key]).lower() if isinstance(obj[foreign_key], str) else obj[foreign_key]: self.create_basic_object(obj) for obj in objects}
 
     def get_relationship_type_by_content(self, downstream, upstream):
-        path = "/api/v2/relationship_types"
+        path = "api/channel/device42/relationship-types"
         relationship_types = self.request(path, "GET", "relationship_types")
 
         for relationship_type in relationship_types:
@@ -390,30 +494,55 @@ class FreshService(object):
         return None
 
     def get_relationships_by_id(self, asset_id):
-        path = "/api/v2/assets/%d/relationships" % asset_id
+        path = "api/channel/device42/assets/%d/relationships" % asset_id
         return self.request(path, "GET", "relationships")
 
     def insert_relationships(self, data):
-        path = "/api/v2/relationships/bulk-create"
+        path = "api/channel/device42/relationships/bulk-create"
         job = self._post(path, data)
         return job["job_id"]
 
     def detach_relationship(self, relationship_id):
-        path = "/api/v2/relationships?ids=%d" % relationship_id
+        path = "api/channel/device42/relationships?ids=%d" % relationship_id
         return self._delete(path)
 
     def get_installations_by_id(self, display_id):
-        path = "/api/v2/applications/%d/installations" % display_id
+        path = "api/channel/device42/applications/%d/installations" % display_id
         return self.request(path, "GET", "installations")
 
     def insert_installation(self, display_id, data):
-        path = "/api/v2/applications/%d/installations" % display_id
+        path = "api/channel/device42/applications/%d/installations" % display_id
         installation = self._post(path, data)
         if len(installation) > 0:
             return installation['installation']["id"]
 
         return -1
 
+    def upsert_installation(self, display_id, data):
+        path = "api/channel/device42/applications/%d/upsert-installations" % display_id
+        job = self._post(path, data)
+        return job["job_id"]
+
     def get_job(self, job_id):
-        path = "/api/v2/jobs/%s" % job_id
+        path = "api/channel/device42/jobs/%s" % job_id
+        return self._get(path)
+
+    def register_main_appliance(self, data):
+        path = "api/channel/device42/main-appliance/register"
+        self._post(path, data)
+
+    def oauth2_app(self, data):
+        path = "api/channel/device42/oauth2/apps"
+        return self._post(path, data)
+
+    def oauth2_app_update(self, app_id, data):
+        path = "api/channel/device42/oauth2/apps/" + app_id
+        return self._patch(path, data)
+
+    def oauth2_app_delete(self, app_id):
+        path = "api/channel/device42/oauth2/apps/" + app_id
+        return self._delete(path)
+
+    def get_organization(self):
+        path = "api/channel/device42/organization"
         return self._get(path)

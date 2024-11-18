@@ -1541,9 +1541,9 @@ class FreshserviceIntegration(object):
                         break
 
                     data = dict()
-                    if not self.default_approver:
+                    if not self.freshservice.default_approver:
                         raise Exception("The approver is required.")
-                    data['approver_id'] = int(self.default_approver)
+                    data['approver_id'] = int(self.freshservice.default_approver)
 
                     # validation
                     for map_info in mapping["field"]:
@@ -2026,7 +2026,7 @@ class FreshserviceIntegration(object):
 
         sources = doql_results["objects"]
 
-        if _type and _type in ("contract", "contract_asset") and self.default_approver is None:  # to support Backward compatibility
+        if _type and _type in ("contract", "contract_asset") and self.freshservice.default_approver is None:  # to support Backward compatibility
             return STATUS_SUCCESS, None, 0, 0, 0, 0
 
         if not execute:

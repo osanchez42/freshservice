@@ -28,7 +28,7 @@ class Freshservice(object):
         self.base = url
         self.api_token = api_key
         self.logger = logger
-        self.default_apporver_id = freshservice_default_approver
+        self.default_approver = freshservice_default_approver
         self.base_url = self.base
         self.headers = {}
         self.last_time_call_api = None

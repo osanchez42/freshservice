@@ -5,80 +5,36 @@ This repository contains script that helps you sync data from Device42 to Freshs
 
 ### Download and Installation
 -----------------------------
-Device42 v16.19.00+ (Legacy Included)
+Device42 v16.19.00+ 
 Python 3.5+
 
 The following Python Packages are required:
 
-* appdirs==1.4.4
-* beautifulsoup4==4.12.3
-* bs4==0.0.2
 * certifi==2024.8.30
 * cffi==1.17.1
 * charset-normalizer==3.3.2
-* colorama==0.4.6
 * cryptography==43.0.1
-* cssselect==1.2.0
-* fake-useragent==1.5.1
 * idna==3.10
-* importlib_metadata==8.5.0
 * lxml==5.3.0
-* parse==1.20.2
 * pycparser==2.22
-* pyee==11.1.1
 * PyJWT==2.9.0
-* pyppeteer==2.0.0
-* pyquery==2.0.1
 * pytz==2024.2
 * requests==2.32.3
-* requests-html==0.10.0
-* soupsieve==2.6
-* tqdm==4.66.5
-* typing_extensions==4.12.2
-* urllib3==1.26.20
-* w3lib==2.2.1
-* websockets==10.4
+* urllib3==2.2.3
 * xmljson==0.2.1
-* zipp==3.20.2
 
 These can all be installed by running `pip install -r requirements.txt`.
 
-install chromium
-
-playwright install
-
-Once installed, the script itself is run by this command: `python d42_sd_sync.py`.
-
-
-### Download and Installation (Legacy)
------------------------------ 
-To utilize the Device42_freshservice_mapping script, Python 3.5+ is required. The following Python Packages are required as well:
-
-pycrypto==2.6.1
-pyparsing==2.1.10
-pyzmq==16.0.2
-requests==2.13.0
-xmljson==0.2.0
-These can all be installed by running pip install -r requirements.txt.
-
-In order to run the legacy migration, you will also need to modify the mapping.xml file so that the legacy mapping options are used
-
-modify the following line so that `enable` is set to false for the v2_views
-```enable="false" description="Copy Servers from Device42 to Freshservice using DOQL v2_views"```
-
-modify the following line so that `enable` is set to true for the v1_views
-```enable="true" description="Copy Servers from Device42 to Freshservice using DOQL v1_views"```
-
-Once the packages are installed and the script is configured, the script can be run by this command: python d42_sd_sync.py.
+Once installed, the script itself is run by this command: `python main.py`.
 
 ### Configuration
 -----------------------------
 Prior to using the script, it must be configured to connect to your Device42 instance and your Freshservice instance.
 * Save a copy of mapping.xml.sample as mapping.xml. 
-* Enter your URL, User, Password, API Key, and default approver email address in the Freshservice and Device42 sections (lines 2-11).
-API Key can be obtained from Freshservice profile page
+* In the config.ini file enter your URL, User, Password in the Device42 section
+* In the config.ini file enter your URL, API Key, default approver email address (optional) in the Freshservice section; API Key can be obtained from Freshservice profile page
 
-Below the credential settings, you’ll see a Tasks section. 
+in the mapping.xml, you’ll see a Tasks section. 
 Multiple Tasks can be setup to synchronize various CIs from Device42 to Freshservice.
 In the <api> section of each task, there will be a <resource> section that queries Device42 to obtain the desired CIs. 
 Full documentation of the Device42 API and endpoints is available at https://api.device42.com. 
@@ -112,9 +68,10 @@ Please use the following table as a reference only, actual times may vary due to
 ### Info
 -----------------------------
 * mapping.xml - file from where we get fields relations between D42 and Freshservice
-* devicd42.py - file with integration device42 instance
+* mapping.xsd - file used to validate xml file
+* device42.py - file with integration device42 instance
 * freshservice.py - file with integration freshservice instance
-* d42_sd_sync.py - initialization and processing file, where we prepare API calls
+* integration.py - initialization and processing file, where we prepare API calls
 
 ### Support
 -----------------------------
@@ -122,4 +79,4 @@ We will support any issues you run into with the script and help answer any ques
 
 ### Version
 -----------------------------
-2.0.0.201207
+3.0.0.11172024

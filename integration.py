@@ -601,28 +601,28 @@ class FreshserviceIntegration(object):
                                 try:
                                     value = str(value)
                                 except Exception as e:
-                                    logger.exception(f"Error converting value to string {e.message}")
+                                    logger.exception(f"Error converting value to string {e}")
                                     is_valid = False
                             
                             elif target_type == "integer":
                                 try:
                                     value = int(value)
                                 except Exception as e:
-                                    logger.exception(f"Error converting value to integer {e.message}")
+                                    logger.exception(f"Error converting value to integer {e}")
                                     is_valid = False
                             
                             elif target_type == "float":
                                 try:
                                     value = float(value)
                                 except Exception as e:
-                                    logger.exception(f"Error converting value to float {e.message}")
+                                    logger.exception(f"Error converting value to float {e}")
                                     is_valid = False
                             
                             elif target_type == "boolean":
                                 try:
                                     value = bool(value)
                                 except Exception as e:
-                                    logger.exception(f"Error converting vale to boolean {e.message}")
+                                    logger.exception(f"Error converting vale to boolean {e}")
                                     is_valid = False 
 
                             elif target_type == "dropdown":
@@ -641,7 +641,7 @@ class FreshserviceIntegration(object):
                                         else:
                                             value = option
                                 except Exception as e:
-                                    logger.exception(f"Error selecting option for dropdown {e.message}")
+                                    logger.exception(f"Error selecting option for dropdown {e}")
                                     is_valid = False
                         if not is_valid:
                             fs_log(logging.DEBUG, "argument '%s' is invalid." % map_info["@target"])
@@ -661,7 +661,7 @@ class FreshserviceIntegration(object):
                                         value = {}
                                     value[map_info["@target-field"]] = field_value
                                 except Exception as e:
-                                    logger.exception(f"Error converting vale to boolean {e.message}")
+                                    logger.exception(f"Error converting vale to boolean {e}")
                                     is_valid = False
 
                             if asset_type_field["asset_type_id"] is not None:

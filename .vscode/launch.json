@@ -23,6 +23,16 @@
             "args": [
                 "--validate"
             ]
+        },
+        {
+            "name": "Delete All Assets",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--delete"
+            ]
         }
     ]
 }

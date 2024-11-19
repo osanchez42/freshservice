@@ -29,6 +29,7 @@ parser.add_argument('-fsurl', '--freshserviceurl', action='store_true', help='Fr
 parser.add_argument('-fstoken', '--freshservicetoken', action='store_true', help='Freshservice API token')
 parser.add_argument('-fsuser', '--freshserviceusername', action='store_true', help='default approver', default=None)
 parser.add_argument('-v', '--validate', action='store_true', help='validate mapping', default=False)
+parser.add_argument('-del', '--delete', action='store_true', help='delete all assets in FS', default=False)
 
 parser.add_argument('-d42url', '--d42url', action='store_true', help='Device42 URL')
 parser.add_argument('-d42user', '--d42username', action='store_true', help='Device42 username')
@@ -76,8 +77,6 @@ def get_agent_from_freshservice(freshservice, email):
     return default_approver
 
 def run():
-    print("Running Device42 to Freshservice Sync")
-
     debug = False
     quiet = False
     last_update = "1900-01-01 00:00:00+00:00"
@@ -188,15 +187,17 @@ def run():
     
     # read the config files
     config = parse_config("mapping.xml")
-    logger.debug("configuration info: %s" % (json.dumps(config)))
 
     if freshervice_default_approver_email:
         freshservice_default_approver = get_agent_from_freshservice(freshervice_default_approver_email)
     
-    device42_object = Device42(device42_url, device42_user, device42_pass, logger)
     freshservice_object = Freshservice(freshservice_url, freshservice_api_key, freshservice_default_approver, logger)
+    if args.delete == True:
+        print("Deleteing all assets in Freshservice")
+        freshservice_object.delete_all_assets()
+        return
+    device42_object = Device42(device42_url, device42_user, device42_pass, logger)
     freshserviceIntegration_object = FreshserviceIntegration(device42_object, freshservice_object, last_update, logger)
-
     freshserviceIntegration_object.process_tasks(config)
 
     print("Completed! View log at %s" % log_file)

@@ -149,7 +149,7 @@ class Freshservice(object):
             path += '/'
         return self._send("PATCH", path, data=data, headers=headers)
 
-    def _put(self, path, data, headers=None):
+    def _put(self, path, data=None, headers=None):
         if not path.endswith('/'):
             path += '/'
         return self._send("PUT", path, data=data, headers=headers)
@@ -469,7 +469,6 @@ class Freshservice(object):
 
     def create_assets_map_key_from_value(self, val):
         key = None
-
         if val:
             key = val.strip()
             if key:
@@ -484,7 +483,7 @@ class Freshservice(object):
         return {self.normalize_value(obj[foreign_key]).lower() if isinstance(obj[foreign_key], str) else obj[foreign_key]: self.create_basic_object(obj) for obj in objects}
 
     def get_relationship_type_by_content(self, downstream, upstream):
-        path = "api/channel/device42/relationship-types"
+        path = "api/v2/relationship_types"
         relationship_types = self.request(path, "GET", "relationship_types")
 
         for relationship_type in relationship_types:
@@ -494,30 +493,31 @@ class Freshservice(object):
         return None
 
     def get_relationships_by_id(self, asset_id):
-        path = "api/channel/device42/assets/%d/relationships" % asset_id
+        path = "api/v2/assets/%s/relationships" % asset_id
         return self.request(path, "GET", "relationships")
 
     def insert_relationships(self, data):
-        path = "api/channel/device42/relationships/bulk-create"
+        path = "api/v2/relationships/bulk-create"
         job = self._post(path, data)
         return job["job_id"]
 
     def detach_relationship(self, relationship_id):
-        path = "api/channel/device42/relationships?ids=%d" % relationship_id
+        path = "api/v2/relationships?ids=%d" % relationship_id
         return self._delete(path)
 
     def get_installations_by_id(self, display_id):
-        path = "api/channel/device42/applications/%d/installations" % display_id
+        path = "api/v2/applications/%d/installations" % display_id
         return self.request(path, "GET", "installations")
 
     def insert_installation(self, display_id, data):
-        path = "api/channel/device42/applications/%d/installations" % display_id
+        path = "api/v2/applications/%d/installations" % display_id
         installation = self._post(path, data)
         if len(installation) > 0:
             return installation['installation']["id"]
 
         return -1
 
+    # Im not sure if there is an endpoint for this in public API
     def upsert_installation(self, display_id, data):
         path = "api/channel/device42/applications/%d/upsert-installations" % display_id
         job = self._post(path, data)
@@ -546,3 +546,27 @@ class Freshservice(object):
     def get_organization(self):
         path = "api/channel/device42/organization"
         return self._get(path)
+
+    def get_all_assets(self, assets=[], page=1):
+        path = f"api/v2/assets?per_page=100&page={page}"
+        resp = self._get(path)
+        current_assets = resp.get('assets', [])
+        assets += current_assets
+
+        if not current_assets:
+            return assets
+
+        return self.get_all_assets(assets, page + 1)
+    
+    def delete_asset(self, asset_id):
+        path = "api/v2/assets/%d" % asset_id
+        return self._delete(path)
+    
+    def delete_all_assets(self):
+        all_assets = self.get_all_assets()
+        for asset in all_assets:
+            display_id = asset.get('display_id')
+            if display_id:
+                print("deleting asset with display id: %d" % display_id)
+                path = "api/v2/assets/%d/delete_forever" % display_id
+                self._put(path, None, {'content-type': 'application/json'})

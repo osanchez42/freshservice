@@ -246,13 +246,13 @@ class FreshserviceIntegration(object):
         return None
 
     def get_asset_types_map(self):
-        return self.get_cache_items(CACHE_ASSET_TYPES, "api/v2/asset_types", "asset_types")
+        return self.get_cache_items(CACHE_ASSET_TYPES, "api/channel/device42/asset_types", "asset_types")
 
     def get_assets_maps(self):
-        return self.get_cache_items(CACHE_ASSETS, 'api/v2/assets?include=type_fields', 'assets')
+        return self.get_cache_items(CACHE_ASSETS, 'api/channel/device42/assets?include=type_fields', 'assets')
 
     def get_trash_assets_maps(self):
-        return self.get_cache_items(CACHE_TRASH_ASSETS, 'api/v2/assets?trashed=true&include=type_fields', 'assets')
+        return self.get_cache_items(CACHE_TRASH_ASSETS, 'api/channel/device42/assets?trashed=true&include=type_fields', 'assets')
 
     def get_softwares_map(self):
         return self.get_cache_items(CACHE_SOFTWARES, 'api/v2/applications', 'applications')
@@ -1186,7 +1186,6 @@ class FreshserviceIntegration(object):
         for idx, source in enumerate(sources):
             try:
                 object_name = None
-
                 fs_log(logging.INFO, "Processing %s - %s." % (source[mapping["@key"]], source[mapping["@target-key"]]))
                 primary_asset_match_values = AssetMatchValues(matching["source-1"], source)
                 primary_asset = self.find_asset_in_maps(existing_assets_maps, primary_asset_match_values)

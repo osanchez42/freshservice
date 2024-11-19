@@ -33,6 +33,7 @@ Prior to using the script, it must be configured to connect to your Device42 ins
 * Save a copy of mapping.xml.sample as mapping.xml. 
 * In the config.ini file enter your URL, User, Password in the Device42 section
 * In the config.ini file enter your URL, API Key, default approver email address (optional) in the Freshservice section; API Key can be obtained from Freshservice profile page
+* Install the Device42 Integration from the Freshservice apps https://d42demo14.freshcmdb.com/a/admin/marketplace/gallery?route=app&id=200264
 
 in the mapping.xml, you’ll see a Tasks section. 
 Multiple Tasks can be setup to synchronize various CIs from Device42 to Freshservice.

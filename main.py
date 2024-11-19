@@ -30,6 +30,7 @@ parser.add_argument('-fstoken', '--freshservicetoken', action='store_true', help
 parser.add_argument('-fsuser', '--freshserviceusername', action='store_true', help='default approver', default=None)
 parser.add_argument('-v', '--validate', action='store_true', help='validate mapping', default=False)
 parser.add_argument('-del', '--delete', action='store_true', help='delete all assets in FS', default=False)
+parser.add_argument('-delr', '--deleterelationships', action='store_true', help='delete all relationships in FS', default=False)
 
 parser.add_argument('-d42url', '--d42url', action='store_true', help='Device42 URL')
 parser.add_argument('-d42user', '--d42username', action='store_true', help='Device42 username')
@@ -195,6 +196,10 @@ def run():
     if args.delete == True:
         print("Deleteing all assets in Freshservice")
         freshservice_object.delete_all_assets()
+        return
+    if args.deleterelationships == True:
+        print("Deleteing all relationships in Freshservice")
+        freshservice_object.delete_all_relationships()
         return
     device42_object = Device42(device42_url, device42_user, device42_pass, logger)
     freshserviceIntegration_object = FreshserviceIntegration(device42_object, freshservice_object, last_update, logger)

@@ -557,6 +557,17 @@ class Freshservice(object):
             return assets
 
         return self.get_all_assets(assets, page + 1)
+
+    def get_all_relationships(self, relationships=[], page=1):
+        path = f"api/v2/relationships?per_page=100&page={page}"
+        resp = self._get(path)
+        current_relationships = resp.get('relationships', [])
+        relationships += current_relationships
+
+        if not current_relationships:
+            return relationships
+
+        return self.get_all_relationships(relationships, page + 1)
     
     def delete_asset(self, asset_id):
         path = "api/v2/assets/%d" % asset_id
@@ -570,3 +581,18 @@ class Freshservice(object):
                 print("deleting asset with display id: %d" % display_id)
                 path = "api/v2/assets/%d/delete_forever" % display_id
                 self._put(path, None, {'content-type': 'application/json'})
+    
+    def delete_all_relationships(self):
+        all_relationships = self.get_all_relationships()
+        all_relationship_ids = []
+        for relationship in all_relationships:
+            relationship_id = relationship.get('id')
+            if relationship_id:
+                all_relationship_ids.append(str(relationship_id))
+        # delete in max 100 relationship chunks
+        while all_relationship_ids:
+            path = "api/v2/relationships?ids=%s" % ",".join(all_relationship_ids[:100])
+            self._delete(path)
+            all_relationship_ids = all_relationship_ids[100:]
+
+

@@ -162,23 +162,23 @@ class Freshservice(object):
             self.logger.debug(message)
 
     def insert_asset(self, data):
-        path = "api/v2/assets"
+        path = "api/channel/device42/assets"
         result = self._post(path, data)
         return self.create_basic_object(result["asset"])
 
     def update_asset(self, data, display_id):
-        path = "api/v2/assets/%d" % display_id
+        path = "api/channel/device42/assets/%d" % display_id
         result = self._put(path, data)
         return self.create_basic_object(result["asset"])
 
     def delete_asset(self, display_id):
-        path = "api/v2/assets/%d" % display_id
+        path = "api/channel/device42/assets/%d" % display_id
         result = self._delete(path)
         return result
 
     def search_assets(self, search_field, search_value):
         search = quote("%s:'%s'" % (search_field, search_value))
-        path = 'api/v2/assets?include=type_fields&search="%s"' % search
+        path = 'pi/channel/device42/assets?include=type_fields&search="%s"' % search
         result = self._get(path)
         basic_objects = []
         for asset in result['assets']:
@@ -187,63 +187,63 @@ class Freshservice(object):
         return basic_objects
 
     def get_assets_by_asset_type(self, asset_type_id):
-        path = "api/v2/assets?include=type_fields&query=\"asset_type_id:%d\"" % asset_type_id
+        path = "api/channel/device42/assets?include=type_fields&query=\"asset_type_id:%d\"" % asset_type_id
         assets = self._get(path)
         return assets["assets"]
 
     def get_components_by_asset_id(self, asset_id):
-        path = "api/v2/assets/%d/components" % asset_id
+        path = "api/channel/device42/assets/%d/components" % asset_id
         result = self._get(path)
         return result["components"]
 
     def insert_component(self, asset_id, data):
-        path = "api/v2/assets/%d/components" % asset_id
+        path = "api/channel/device42/applications"
         result = self._post(path, data)
         return result["component"]
 
     def update_component(self, asset_id, component_id, data):
-        path = "api/v2/assets/%d/components/%d" % (asset_id, component_id)
+        path = "api/channel/device42/assets/%d/components/%d" % (asset_id, component_id)
         result = self._put(path, data)
         return result["component"]
 
     def insert_software(self, data):
-        path = "api/v2/applications"
+        path = "api/channel/device42/applications"
         result = self._post(path, data)
         return self.create_basic_object(result["application"])
 
     def delete_software(self, id):
-        path = "api/v2/applications/%d" % id
+        path =  "api/channel/device42/applications/%d" % id
         result = self._delete(path)
         return result
 
     def insert_product(self, data):
-        path = "api/v2/products"
+        path = "api/channel/device42/products"
         result = self._post(path, data)
         return self.create_basic_object(result["product"])
 
     def update_product(self, data, id):
-        path = "api/v2/products/%d" % id
+        path = "api/channel/device42/products/%d" % id
         result = self._put(path, data)
         return result["product"]["id"]
 
     def insert_contract(self, data):
-        path = "api/v2/contracts/"
+        path = "api/channel/device42/contracts"
         result = self._post(path, data)
         return self.create_basic_object(result["contract"])
 
     def update_contract(self, data, id):
-        path = "api/v2/contracts/%d" % id
+        path = "api/channel/device42/contracts/%d" % id
         result = self._put(path, data)
         return result["contract"]["id"]
 
     def get_associated_assets_by_contract(self, contract_id):
-        path = "api/v2/contracts/%d/associated-assets" % contract_id
+        path = "api/channel/device42/contracts/%d/associated-assets" % contract_id
         return self.request(path, "GET", "associated_assets")
 
     def get_all_ci_types(self):
         if self.asset_types is not None:
             return self.asset_types
-        path = "api/v2/asset_types"
+        path = "api/channel/device42/asset_types"
         self.asset_types = self.request(path, "GET", "asset_types")
         return self.asset_types
 
@@ -282,7 +282,7 @@ class Freshservice(object):
         return self.get_ci_type_by_name(self.CITypeUnixServerName)
 
     def get_asset_type_fields(self, asset_type_id):
-        path = "api/v2/asset_types/%d/fields" % asset_type_id
+        path = "api/channel/device42/asset_types/%d/fields" % asset_type_id
         return self._get(path)["asset_type_fields"]
 
     def get_all_server_assets(self):
@@ -295,17 +295,17 @@ class Freshservice(object):
         return server_assets
 
     def get_products(self):
-        path = "api/v2/products"
+        path = "api/channel/device42/products"
         products = self._get(path)
         return products["products"]
 
     def get_vendors(self):
-        path = "api/v2/vendors"
+        path = "api/channel/device42/vendors"
         vendors = self._get(path)
         return vendors["vendors"]
 
     def get_agents(self, search, page, per_page):
-        path = "api/v2/agents"
+        path = "api/channel/device42/agents"
         data = {'page': page, 'per_page': per_page}
         if search and len(search) >= 2:
             data['query'] = '"~[name|first_name|last_name|email]:\'' + search + '\'"'
@@ -483,7 +483,7 @@ class Freshservice(object):
         return {self.normalize_value(obj[foreign_key]).lower() if isinstance(obj[foreign_key], str) else obj[foreign_key]: self.create_basic_object(obj) for obj in objects}
 
     def get_relationship_type_by_content(self, downstream, upstream):
-        path = "api/v2/relationship_types"
+        path = "api/channel/device42/relationship-types"
         relationship_types = self.request(path, "GET", "relationship_types")
 
         for relationship_type in relationship_types:
@@ -493,24 +493,24 @@ class Freshservice(object):
         return None
 
     def get_relationships_by_id(self, asset_id):
-        path = "api/v2/assets/%s/relationships" % asset_id
+        path = "api/channel/device42/assets/%d/relationships" % asset_id
         return self.request(path, "GET", "relationships")
 
     def insert_relationships(self, data):
-        path = "api/v2/relationships/bulk-create"
+        path = "api/channel/device42/relationships/bulk-create"
         job = self._post(path, data)
         return job["job_id"]
 
     def detach_relationship(self, relationship_id):
-        path = "api/v2/relationships?ids=%d" % relationship_id
+        path = "api/channel/device42/relationships?ids=%d" % relationship_id
         return self._delete(path)
 
     def get_installations_by_id(self, display_id):
-        path = "api/v2/applications/%d/installations" % display_id
+        path = "api/channel/device42/applications/%d/installations" % display_id
         return self.request(path, "GET", "installations")
 
     def insert_installation(self, display_id, data):
-        path = "api/v2/applications/%d/installations" % display_id
+        path = "api/channel/device42/applications/%d/installations" % display_id
         installation = self._post(path, data)
         if len(installation) > 0:
             return installation['installation']["id"]

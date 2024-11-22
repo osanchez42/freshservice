@@ -472,13 +472,22 @@ class FreshserviceIntegration(object):
         cloud_to_hardware_asset_type_ids.add(self.build_asset_type_migration_key_from_names(asset_types_map,
                                                                                             ASSET_TYPE_VIRTUAL_MACHINE_DEPRECATED,
                                                                                             ASSET_TYPE_VMWARE_VCENTER_IMAGE))
-
         cloud_to_hardware_asset_type_ids.add(self.build_asset_type_migration_key_from_names(asset_types_map,
                                                                                             ASSET_TYPE_AWS_K8S_NODE_DEPRECATED,
                                                                                             ASSET_TYPE_AWS_K8S_NODE))
         cloud_to_hardware_asset_type_ids.add(self.build_asset_type_migration_key_from_names(asset_types_map,
                                                                                             ASSET_TYPE_SERVER,
                                                                                             ASSET_TYPE_AWS_K8S_NODE))
+        cloud_to_hardware_asset_type_ids.add(self.build_asset_type_migration_key_from_names(asset_types_map,
+                                                                                            ASSET_TYPE_SERVER,
+                                                                                            ASSET_TYPE_MOBILE))
+        cloud_to_hardware_asset_type_ids.add(self.build_asset_type_migration_key_from_names(asset_types_map,
+                                                                                            ASSET_TYPE_SERVER,
+                                                                                            ASSET_TYPE_LAPTOP))
+        cloud_to_hardware_asset_type_ids.add(self.build_asset_type_migration_key_from_names(asset_types_map,
+                                                                                            ASSET_TYPE_SERVER,
+                                                                                            ASSET_TYPE_TABLET))
+
         return cloud_to_hardware_asset_type_ids
 
     def update_objects_from_server(self, sources, _target, matching, mapping):
